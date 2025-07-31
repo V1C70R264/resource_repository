@@ -23,9 +23,10 @@ import {
 interface SidebarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
+  onNewFolderClick?: () => void;
 }
 
-export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
+export function Sidebar({ activeSection, onSectionChange, onNewFolderClick }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const navigationItems = [
@@ -48,7 +49,7 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="start" sideOffset={8}>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={onNewFolderClick}>
               <FolderPlus className="mr-2 h-4 w-4" />
               New folder
             </DropdownMenuItem>

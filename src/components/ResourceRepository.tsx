@@ -3,6 +3,7 @@ import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Breadcrumb } from "./Breadcrumb";
 import { FileGrid } from "./FileGrid";
+import { NewFolderDialog } from "./NewFolderDialog";
 import { toast } from "sonner";
 
 interface FileItem {
@@ -17,6 +18,13 @@ interface FileItem {
   shared: boolean;
   thumbnail?: string;
   tags?: string[];
+  parentId?: string;
+}
+
+interface BreadcrumbItem {
+  id: string;
+  name: string;
+  path: string;
 }
 
 // Sample data
@@ -159,38 +167,47 @@ const sampleFiles: FileItem[] = [
   }
 ];
 
-const breadcrumbItems = [
-  { id: 'root', name: 'My Drive', path: '/' },
-  { id: 'documents', name: 'Documents', path: '/documents' },
-];
-
 export function ResourceRepository() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState('my-drive');
   const [files, setFiles] = useState<FileItem[]>(sampleFiles);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
+    { id: 'root', name: 'My Drive', path: '/' }
+  ]);
+  const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
 
   const filteredFiles = files.filter(file => {
     const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          file.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     
+    // Filter by current folder location
+    const inCurrentFolder = currentFolderId ? file.parentId === currentFolderId : !file.parentId;
+    
     switch (activeSection) {
       case 'shared':
-        return matchesSearch && file.shared;
+        return matchesSearch && file.shared && inCurrentFolder;
       case 'starred':
-        return matchesSearch && file.starred;
+        return matchesSearch && file.starred && inCurrentFolder;
       case 'recent':
-        return matchesSearch; // For demo, showing all files as recent
+        return matchesSearch && inCurrentFolder; // For demo, showing all files as recent
       case 'trash':
         return false; // No files in trash for demo
       default:
-        return matchesSearch;
+        return matchesSearch && inCurrentFolder;
     }
   });
 
   const handleItemClick = (item: FileItem) => {
     if (item.type === 'folder') {
-      toast(`Opening folder: ${item.name}`);
+      setCurrentFolderId(item.id);
+      setBreadcrumbs(prev => [...prev, { 
+        id: item.id, 
+        name: item.name, 
+        path: `/${item.name}` 
+      }]);
+      toast(`Opened folder: ${item.name}`);
     }
   };
 
@@ -220,7 +237,44 @@ export function ResourceRepository() {
   };
 
   const handleBreadcrumbNavigate = (path: string) => {
-    toast(`Navigating to: ${path}`);
+    const clickedIndex = breadcrumbs.findIndex(item => item.path === path);
+    if (clickedIndex >= 0) {
+      const newBreadcrumbs = breadcrumbs.slice(0, clickedIndex + 1);
+      setBreadcrumbs(newBreadcrumbs);
+      
+      if (clickedIndex === 0) {
+        setCurrentFolderId(null);
+      } else {
+        setCurrentFolderId(newBreadcrumbs[clickedIndex].id);
+      }
+      
+      toast(`Navigated to: ${newBreadcrumbs[clickedIndex].name}`);
+    }
+  };
+
+  const handleCreateFolder = (name: string) => {
+    const newFolder: FileItem = {
+      id: `folder_${Date.now()}`,
+      name,
+      type: 'folder',
+      modified: new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      }),
+      owner: 'You',
+      starred: false,
+      shared: false,
+      tags: ['folder'],
+      parentId: currentFolderId || undefined
+    };
+    
+    setFiles(prev => [...prev, newFolder]);
+    toast(`Created folder: ${name}`);
+  };
+
+  const handleNewFolderClick = () => {
+    setShowNewFolderDialog(true);
   };
 
   return (
@@ -236,12 +290,13 @@ export function ResourceRepository() {
         <Sidebar
           activeSection={activeSection}
           onSectionChange={setActiveSection}
+          onNewFolderClick={handleNewFolderClick}
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="p-6 border-b border-border bg-background/50 backdrop-blur-sm">
             <Breadcrumb
-              items={breadcrumbItems}
+              items={breadcrumbs}
               onNavigate={handleBreadcrumbNavigate}
             />
           </div>
@@ -287,6 +342,12 @@ export function ResourceRepository() {
           </div>
         </main>
       </div>
+      
+      <NewFolderDialog
+        open={showNewFolderDialog}
+        onOpenChange={setShowNewFolderDialog}
+        onCreateFolder={handleCreateFolder}
+      />
     </div>
   );
 }
