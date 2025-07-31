@@ -13,7 +13,9 @@ import {
   Trash2, 
   Eye,
   Edit,
-  Clock
+  Clock,
+  Tag,
+  Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -157,6 +159,19 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                         <DropdownMenuItem onClick={() => onItemAction('star', item)}>
                           <Star className="mr-2 h-4 w-4" />
                           {item.starred ? 'Remove star' : 'Add star'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => onItemAction('metadata', item)}>
+                          <Tag className="mr-2 h-4 w-4" />
+                          Edit Metadata
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onItemAction('permissions', item)}>
+                          <Shield className="mr-2 h-4 w-4" />
+                          Access Control
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onItemAction('audit', item)}>
+                          <Clock className="mr-2 h-4 w-4" />
+                          View Audit Log
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => onItemAction('delete', item)} className="text-destructive">
@@ -352,6 +367,28 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                     }}>
                       <Star className="mr-2 h-4 w-4" />
                       {item.starred ? 'Remove star' : 'Add star'}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      onItemAction('metadata', item);
+                    }}>
+                      <Tag className="mr-2 h-4 w-4" />
+                      Edit Metadata
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      onItemAction('permissions', item);
+                    }}>
+                      <Shield className="mr-2 h-4 w-4" />
+                      Access Control
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      onItemAction('audit', item);
+                    }}>
+                      <Clock className="mr-2 h-4 w-4" />
+                      View Audit Log
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 

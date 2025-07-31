@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Upload } from "lucide-react";
+import { Upload, Clock, Shield, Tag } from "lucide-react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Breadcrumb } from "./Breadcrumb";
@@ -7,20 +7,22 @@ import { FileGrid } from "./FileGrid";
 import { NewFolderDialog } from "./NewFolderDialog";
 import { FileUploadDialog } from "./FileUploadDialog";
 import { FolderUploadDialog } from "./FolderUploadDialog";
+import { AdvancedSearch } from "./AdvancedSearch";
+import { AuditLogDialog } from "./AuditLog";
+import { AccessControlDialog } from "./AccessControl";
+import { FilePreview } from "./FilePreview";
+import { MetadataEditor } from "./MetadataEditor";
 import { toast } from "sonner";
+import { 
+  FileMetadata, 
+  AuditLog, 
+  User, 
+  Permission, 
+  SearchFilters, 
+  PreviewData 
+} from "@/lib/types";
 
-interface FileItem {
-  id: string;
-  name: string;
-  type: 'folder' | 'file';
-  fileType?: string;
-  size?: string;
-  modified: string;
-  owner: string;
-  starred: boolean;
-  shared: boolean;
-  thumbnail?: string;
-  tags?: string[];
+interface FileItem extends FileMetadata {
   parentId?: string;
 }
 
@@ -36,137 +38,161 @@ const sampleFiles: FileItem[] = [
     id: '1',
     name: 'Project Documentation',
     type: 'folder',
+    fileType: 'folder',
+    mimeType: 'application/x-directory',
+    size: 0,
+    sizeFormatted: '0 B',
     modified: 'Oct 25, 2024',
+    created: 'Oct 20, 2024',
     owner: 'John Doe',
     starred: true,
     shared: false,
-    tags: ['important', 'docs']
+    tags: ['important', 'docs', 'project'],
+    language: 'en',
+    documentType: 'Document',
+    description: 'Project documentation and specifications',
+    version: '1.0',
+    path: '/Project Documentation'
   },
   {
     id: '2',
     name: 'Design Assets',
     type: 'folder',
+    fileType: 'folder',
+    mimeType: 'application/x-directory',
+    size: 0,
+    sizeFormatted: '0 B',
     modified: 'Oct 24, 2024',
+    created: 'Oct 19, 2024',
     owner: 'Jane Smith',
     starred: false,
     shared: true,
-    tags: ['design', 'ui']
+    tags: ['design', 'ui', 'assets'],
+    language: 'en',
+    documentType: 'Image',
+    description: 'Design assets and UI components',
+    version: '2.1',
+    path: '/Design Assets'
   },
   {
     id: '3',
     name: 'Annual Report 2024.pdf',
     type: 'file',
     fileType: 'document',
-    size: '2.4 MB',
+    mimeType: 'application/pdf',
+    size: 2516582,
+    sizeFormatted: '2.4 MB',
     modified: 'Oct 23, 2024',
+    created: 'Oct 18, 2024',
     owner: 'Mike Johnson',
     starred: false,
     shared: true,
-    tags: ['report', 'finance']
+    tags: ['report', 'finance', 'annual'],
+    language: 'en',
+    documentType: 'Report',
+    description: 'Annual financial report for 2024',
+    version: '1.0',
+    path: '/Annual Report 2024.pdf'
   },
   {
     id: '4',
     name: 'Team Photo.jpg',
     type: 'file',
     fileType: 'image',
-    size: '1.8 MB',
+    mimeType: 'image/jpeg',
+    size: 1887436,
+    sizeFormatted: '1.8 MB',
     modified: 'Oct 22, 2024',
+    created: 'Oct 17, 2024',
     owner: 'Sarah Wilson',
     starred: true,
     shared: false,
-    tags: ['team', 'photos']
+    tags: ['team', 'photos', 'event'],
+    language: 'en',
+    documentType: 'Image',
+    description: 'Team photo from company event',
+    version: '1.0',
+    path: '/Team Photo.jpg'
   },
   {
     id: '5',
     name: 'Presentation Video.mp4',
     type: 'file',
     fileType: 'video',
-    size: '45.2 MB',
+    mimeType: 'video/mp4',
+    size: 47394652,
+    sizeFormatted: '45.2 MB',
     modified: 'Oct 21, 2024',
+    created: 'Oct 16, 2024',
     owner: 'Alex Brown',
     starred: false,
     shared: true,
-    tags: ['presentation', 'video']
+    tags: ['presentation', 'video', 'meeting'],
+    language: 'en',
+    documentType: 'Video',
+    description: 'Quarterly presentation recording',
+    version: '2.0',
+    path: '/Presentation Video.mp4'
   },
   {
     id: '6',
     name: 'Meeting Recording.mp3',
     type: 'file',
     fileType: 'audio',
-    size: '12.5 MB',
+    mimeType: 'audio/mpeg',
+    size: 13107200,
+    sizeFormatted: '12.5 MB',
     modified: 'Oct 20, 2024',
+    created: 'Oct 15, 2024',
     owner: 'Lisa Davis',
     starred: false,
     shared: false,
-    tags: ['meeting', 'audio']
+    tags: ['meeting', 'recording', 'audio'],
+    language: 'en',
+    documentType: 'Audio',
+    description: 'Meeting recording from weekly team sync',
+    version: '1.0',
+    path: '/Meeting Recording.mp3'
   },
   {
     id: '7',
-    name: 'Archive Files.zip',
+    name: 'Code Repository.zip',
     type: 'file',
     fileType: 'archive',
-    size: '156.7 MB',
+    mimeType: 'application/zip',
+    size: 52428800,
+    sizeFormatted: '50.0 MB',
     modified: 'Oct 19, 2024',
-    owner: 'Tom Wilson',
+    created: 'Oct 14, 2024',
+    owner: 'David Chen',
     starred: false,
-    shared: false,
-    tags: ['archive', 'backup']
+    shared: true,
+    tags: ['code', 'repository', 'backup'],
+    language: 'en',
+    documentType: 'Archive',
+    description: 'Backup of source code repository',
+    version: '3.2',
+    path: '/Code Repository.zip'
   },
   {
     id: '8',
-    name: 'Marketing Materials',
-    type: 'folder',
+    name: 'Marketing Strategy.docx',
+    type: 'file',
+    fileType: 'document',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    size: 2097152,
+    sizeFormatted: '2.0 MB',
     modified: 'Oct 18, 2024',
-    owner: 'Emily Chen',
-    starred: false,
-    shared: true,
-    tags: ['marketing', 'materials']
-  },
-  {
-    id: '9',
-    name: 'Budget Spreadsheet.xlsx',
-    type: 'file',
-    fileType: 'document',
-    size: '890 KB',
-    modified: 'Oct 17, 2024',
-    owner: 'John Doe',
+    created: 'Oct 13, 2024',
+    owner: 'Emma Wilson',
     starred: true,
-    shared: false,
-    tags: ['budget', 'finance']
-  },
-  {
-    id: '10',
-    name: 'Logo Design.png',
-    type: 'file',
-    fileType: 'image',
-    size: '245 KB',
-    modified: 'Oct 16, 2024',
-    owner: 'Design Team',
-    starred: false,
     shared: true,
-    tags: ['logo', 'branding']
-  },
-  {
-    id: '11',
-    name: 'Client Resources',
-    type: 'folder',
-    modified: 'Oct 15, 2024',
-    owner: 'Customer Success',
-    starred: false,
-    shared: true,
-    tags: ['client', 'resources']
-  },
-  {
-    id: '12',
-    name: 'Training Manual.docx',
-    type: 'file',
-    fileType: 'document',
-    size: '3.2 MB',
-    modified: 'Oct 14, 2024',
-    owner: 'HR Department',
-    starred: false,
-    shared: false,
-    tags: ['training', 'manual']
+    tags: ['marketing', 'strategy', 'document'],
+    language: 'en',
+    documentType: 'Document',
+    description: 'Q4 marketing strategy document',
+    version: '2.1',
+    path: '/Marketing Strategy.docx'
   }
 ];
 
@@ -183,6 +209,32 @@ export function ResourceRepository() {
   const [showFileUploadDialog, setShowFileUploadDialog] = useState(false);
   const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // Enhanced features state
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({
+    query: '',
+    fileTypes: [],
+    tags: [],
+    dateRange: {},
+    owners: [],
+    starred: false,
+    shared: false,
+  });
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [users, setUsers] = useState<User[]>([
+    { id: '1', name: 'John Doe', email: 'john@company.com', role: 'admin', permissions: ['read', 'write', 'admin'] },
+    { id: '2', name: 'Jane Smith', email: 'jane@company.com', role: 'editor', permissions: ['read', 'write'] },
+    { id: '3', name: 'Mike Johnson', email: 'mike@company.com', role: 'viewer', permissions: ['read'] },
+    { id: '4', name: 'Sarah Wilson', email: 'sarah@company.com', role: 'editor', permissions: ['read', 'write'] },
+    { id: '5', name: 'Alex Brown', email: 'alex@company.com', role: 'viewer', permissions: ['read'] },
+  ]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [previewFile, setPreviewFile] = useState<PreviewData | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
+  const [showAccessControl, setShowAccessControl] = useState(false);
+  const [showMetadataEditor, setShowMetadataEditor] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
 
   const filteredFiles = files.filter(file => {
     const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -220,7 +272,32 @@ export function ResourceRepository() {
   const handleItemAction = (action: string, item: FileItem) => {
     switch (action) {
       case 'preview':
-        toast(`Previewing: ${item.name}`);
+        if (item.type === 'file') {
+          const previewData: PreviewData = {
+            fileId: item.id,
+            fileName: item.name,
+            fileType: item.fileType || 'unknown',
+            mimeType: item.mimeType || 'application/octet-stream',
+            url: `/api/files/${item.id}/preview`,
+            thumbnail: item.thumbnail,
+            canEdit: true, // This would be determined by permissions
+          };
+          setPreviewFile(previewData);
+          setShowPreview(true);
+          
+          // Log the preview action
+          const auditLog: AuditLog = {
+            id: `log_${Date.now()}`,
+            fileId: item.id,
+            fileName: item.name,
+            action: 'view',
+            userId: 'current-user',
+            userName: 'Current User',
+            timestamp: new Date().toISOString(),
+            details: 'File previewed',
+          };
+          setAuditLogs(prev => [auditLog, ...prev]);
+        }
         break;
       case 'download':
         toast(`Downloading: ${item.name}`);
@@ -236,6 +313,18 @@ export function ResourceRepository() {
         break;
       case 'delete':
         toast(`Moved to trash: ${item.name}`);
+        break;
+      case 'metadata':
+        setSelectedFile(item);
+        setShowMetadataEditor(true);
+        break;
+      case 'permissions':
+        setSelectedFile(item);
+        setShowAccessControl(true);
+        break;
+      case 'audit':
+        setSelectedFile(item);
+        setShowAuditLog(true);
         break;
       default:
         toast(`Action ${action} on: ${item.name}`);
@@ -263,16 +352,18 @@ export function ResourceRepository() {
       id: `folder_${Date.now()}`,
       name,
       type: 'folder',
-      modified: new Date().toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
+      modified: new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
       }),
       owner: 'You',
       starred: false,
       shared: false,
       tags: ['folder'],
-      parentId: currentFolderId || undefined
+      parentId: currentFolderId || undefined,
+      created: "",
+      path: ""
     };
     
     setFiles(prev => [...prev, newFolder]);
@@ -327,16 +418,18 @@ export function ResourceRepository() {
         id: folderId,
         name: folder.name,
         type: 'folder',
-        modified: new Date().toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'short', 
-          day: 'numeric' 
+        modified: new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
         }),
         owner: 'You',
         starred: false,
         shared: false,
         tags: ['folder'],
-        parentId: currentFolderId || undefined
+        parentId: currentFolderId || undefined,
+        created: "",
+        path: ""
       };
       newItems.push(folderItem);
       
@@ -415,14 +508,75 @@ export function ResourceRepository() {
     return breadcrumbs[breadcrumbs.length - 1]?.name || 'My Drive';
   };
 
+  // Enhanced feature handlers
+  const handleSearchFiltersChange = (filters: SearchFilters) => {
+    setSearchFilters(filters);
+  };
+
+  const handleMetadataSave = (metadata: FileMetadata) => {
+    setFiles(prev => prev.map(f => 
+      f.id === metadata.id ? { ...f, ...metadata } : f
+    ));
+    toast('Metadata updated successfully');
+    setShowMetadataEditor(false);
+  };
+
+  const handlePermissionChange = (permission: Permission, action: 'add' | 'update' | 'remove') => {
+    switch (action) {
+      case 'add':
+        setPermissions(prev => [...prev, permission]);
+        break;
+      case 'update':
+        setPermissions(prev => prev.map(p => p.id === permission.id ? permission : p));
+        break;
+      case 'remove':
+        setPermissions(prev => prev.filter(p => p.id !== permission.id));
+        break;
+    }
+    toast(`Permission ${action}ed successfully`);
+  };
+
+  const handlePreviewClose = () => {
+    setShowPreview(false);
+    setPreviewFile(null);
+  };
+
+  const handlePreviewDownload = () => {
+    toast('Download started');
+  };
+
+  const handlePreviewShare = () => {
+    toast('Share dialog opened');
+  };
+
+  const handlePreviewEdit = () => {
+    toast('Edit mode activated');
+  };
+
+  // Get available data for filters
+  const availableTags = Array.from(new Set(files.flatMap(f => f.tags || [])));
+  const availableFileTypes = Array.from(new Set(files.map(f => f.fileType).filter(Boolean)));
+  const availableOwners = Array.from(new Set(files.map(f => f.owner)));
+
   return (
     <div className="h-screen bg-gradient-to-br from-background to-muted/20 flex flex-col">
-      <Header
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-      />
+              <Header
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
+        
+        {/* Enhanced Search Bar */}
+        <div className="px-6 py-3 border-b bg-muted/30">
+          <AdvancedSearch
+            filters={searchFilters}
+            onFiltersChange={handleSearchFiltersChange}
+            availableTags={availableTags}
+            availableFileTypes={availableFileTypes}
+            availableOwners={availableOwners}
+          />
+        </div>
       
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
@@ -522,6 +676,45 @@ export function ResourceRepository() {
         onUploadComplete={handleFolderUploadComplete}
         currentFolderId={currentFolderId}
         currentFolderName={getCurrentFolderName()}
+      />
+
+      {/* Enhanced Feature Dialogs */}
+      {previewFile && (
+        <FilePreview
+          file={previewFile}
+          isOpen={showPreview}
+          onClose={handlePreviewClose}
+          onDownload={handlePreviewDownload}
+          onShare={handlePreviewShare}
+          onEdit={handlePreviewEdit}
+        />
+      )}
+
+      {selectedFile && (
+        <>
+          <MetadataEditor
+            file={selectedFile}
+            isOpen={showMetadataEditor}
+            onClose={() => setShowMetadataEditor(false)}
+            onSave={handleMetadataSave}
+          />
+
+          <AccessControlDialog
+            fileId={selectedFile.id}
+            fileName={selectedFile.name}
+            permissions={permissions}
+            users={users}
+            isOpen={showAccessControl}
+            onClose={() => setShowAccessControl(false)}
+            onPermissionChange={handlePermissionChange}
+          />
+        </>
+      )}
+
+      <AuditLogDialog
+        logs={auditLogs}
+        isOpen={showAuditLog}
+        onClose={() => setShowAuditLog(false)}
       />
     </div>
   );
