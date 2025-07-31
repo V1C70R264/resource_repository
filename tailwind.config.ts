@@ -26,7 +26,17 @@ export default {
 				foreground: 'hsl(var(--foreground))',
 				primary: {
 					DEFAULT: 'hsl(var(--primary))',
-					foreground: 'hsl(var(--primary-foreground))'
+					foreground: 'hsl(var(--primary-foreground))',
+					light: 'hsl(var(--primary-light))',
+					hover: 'hsl(var(--primary-hover))'
+				},
+				drive: {
+					blue: 'hsl(var(--drive-blue))',
+					'blue-light': 'hsl(var(--drive-blue-light))',
+					gray: 'hsl(var(--drive-gray))',
+					'gray-light': 'hsl(var(--drive-gray-light))',
+					green: 'hsl(var(--drive-green))',
+					orange: 'hsl(var(--drive-orange))'
 				},
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
