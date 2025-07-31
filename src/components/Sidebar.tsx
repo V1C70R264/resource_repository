@@ -24,9 +24,11 @@ interface SidebarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
   onNewFolderClick?: () => void;
+  onFileUploadClick?: () => void;
+  onFolderUploadClick?: () => void;
 }
 
-export function Sidebar({ activeSection, onSectionChange, onNewFolderClick }: SidebarProps) {
+export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFileUploadClick, onFolderUploadClick }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const navigationItems = [
@@ -53,11 +55,11 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick }: Si
               <FolderPlus className="mr-2 h-4 w-4" />
               New folder
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={onFileUploadClick}>
               <Upload className="mr-2 h-4 w-4" />
               File upload
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={onFolderUploadClick}>
               <Upload className="mr-2 h-4 w-4" />
               Folder upload
             </DropdownMenuItem>

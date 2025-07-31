@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { Upload } from "lucide-react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Breadcrumb } from "./Breadcrumb";
 import { FileGrid } from "./FileGrid";
 import { NewFolderDialog } from "./NewFolderDialog";
+import { FileUploadDialog } from "./FileUploadDialog";
+import { FolderUploadDialog } from "./FolderUploadDialog";
 import { toast } from "sonner";
 
 interface FileItem {
@@ -177,6 +180,9 @@ export function ResourceRepository() {
     { id: 'root', name: 'My Drive', path: '/' }
   ]);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+  const [showFileUploadDialog, setShowFileUploadDialog] = useState(false);
+  const [showFolderUploadDialog, setShowFolderUploadDialog] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const filteredFiles = files.filter(file => {
     const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -277,6 +283,138 @@ export function ResourceRepository() {
     setShowNewFolderDialog(true);
   };
 
+  const handleFileUploadClick = () => {
+    setShowFileUploadDialog(true);
+  };
+
+  const handleFolderUploadClick = () => {
+    setShowFolderUploadDialog(true);
+  };
+
+  const handleFileUploadComplete = (uploadedFiles: File[], folderId?: string) => {
+    const newFiles: FileItem[] = uploadedFiles.map(file => {
+      const fileType = getFileType(file.name);
+      return {
+        id: `file_${Date.now()}_${Math.random()}`,
+        name: file.name,
+        type: 'file',
+        fileType,
+        size: formatFileSize(file.size),
+        modified: new Date().toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric' 
+        }),
+        owner: 'You',
+        starred: false,
+        shared: false,
+        tags: [fileType],
+        parentId: folderId || undefined
+      };
+    });
+    
+    setFiles(prev => [...prev, ...newFiles]);
+    toast(`Uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
+  };
+
+  const handleFolderUploadComplete = (uploadedFolders: { name: string; files: File[] }[], folderId?: string) => {
+    const newItems: FileItem[] = [];
+    
+    uploadedFolders.forEach(folder => {
+      // Create the folder
+      const folderId = `folder_${Date.now()}_${Math.random()}`;
+      const folderItem: FileItem = {
+        id: folderId,
+        name: folder.name,
+        type: 'folder',
+        modified: new Date().toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric' 
+        }),
+        owner: 'You',
+        starred: false,
+        shared: false,
+        tags: ['folder'],
+        parentId: currentFolderId || undefined
+      };
+      newItems.push(folderItem);
+      
+      // Create files inside the folder
+      folder.files.forEach(file => {
+        const fileType = getFileType(file.name);
+        const fileItem: FileItem = {
+          id: `file_${Date.now()}_${Math.random()}`,
+          name: file.name,
+          type: 'file',
+          fileType,
+          size: formatFileSize(file.size),
+          modified: new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          }),
+          owner: 'You',
+          starred: false,
+          shared: false,
+          tags: [fileType],
+          parentId: folderId
+        };
+        newItems.push(fileItem);
+      });
+    });
+    
+    setFiles(prev => [...prev, ...newItems]);
+    toast(`Uploaded ${uploadedFolders.length} folder${uploadedFolders.length > 1 ? 's' : ''}`);
+  };
+
+  const handleMainAreaDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleMainAreaDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleMainAreaDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      handleFileUploadComplete(files, currentFolderId);
+    }
+  };
+
+  const getFileType = (fileName: string): string => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    if (!extension) return 'file';
+    
+    if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(extension)) return 'image';
+    if (['pdf', 'doc', 'docx', 'txt', 'rtf'].includes(extension)) return 'document';
+    if (['mp4', 'avi', 'mov', 'wmv', 'flv'].includes(extension)) return 'video';
+    if (['mp3', 'wav', 'flac', 'aac'].includes(extension)) return 'audio';
+    if (['zip', 'rar', '7z', 'tar'].includes(extension)) return 'archive';
+    if (['xls', 'xlsx', 'csv'].includes(extension)) return 'spreadsheet';
+    if (['ppt', 'pptx'].includes(extension)) return 'presentation';
+    
+    return 'file';
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getCurrentFolderName = (): string => {
+    return breadcrumbs[breadcrumbs.length - 1]?.name || 'My Drive';
+  };
+
   return (
     <div className="h-screen bg-gradient-to-br from-background to-muted/20 flex flex-col">
       <Header
@@ -291,6 +429,8 @@ export function ResourceRepository() {
           activeSection={activeSection}
           onSectionChange={setActiveSection}
           onNewFolderClick={handleNewFolderClick}
+          onFileUploadClick={handleFileUploadClick}
+          onFolderUploadClick={handleFolderUploadClick}
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -301,8 +441,27 @@ export function ResourceRepository() {
             />
           </div>
           
-          <div className="flex-1 p-6 overflow-auto">
+          <div 
+            className={`flex-1 p-6 overflow-auto transition-colors ${
+              isDragOver ? 'bg-drive-blue/5 border-2 border-dashed border-drive-blue' : ''
+            }`}
+            onDragOver={handleMainAreaDragOver}
+            onDragLeave={handleMainAreaDragLeave}
+            onDrop={handleMainAreaDrop}
+          >
             <div className="mb-6">
+              {isDragOver && (
+                <div className="fixed inset-0 bg-drive-blue/10 backdrop-blur-sm z-50 flex items-center justify-center">
+                  <div className="bg-background border-2 border-dashed border-drive-blue rounded-lg p-8 text-center">
+                    <Upload className="w-16 h-16 text-drive-blue mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Drop files here</h3>
+                    <p className="text-muted-foreground">
+                      Upload files to {getCurrentFolderName()}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
               <h2 className="text-2xl font-semibold text-foreground mb-2">
                 {activeSection === 'my-drive' && 'My Drive'}
                 {activeSection === 'shared' && 'Shared with me'}
@@ -347,6 +506,22 @@ export function ResourceRepository() {
         open={showNewFolderDialog}
         onOpenChange={setShowNewFolderDialog}
         onCreateFolder={handleCreateFolder}
+      />
+      
+      <FileUploadDialog
+        open={showFileUploadDialog}
+        onOpenChange={setShowFileUploadDialog}
+        onUploadComplete={handleFileUploadComplete}
+        currentFolderId={currentFolderId}
+        currentFolderName={getCurrentFolderName()}
+      />
+      
+      <FolderUploadDialog
+        open={showFolderUploadDialog}
+        onOpenChange={setShowFolderUploadDialog}
+        onUploadComplete={handleFolderUploadComplete}
+        currentFolderId={currentFolderId}
+        currentFolderName={getCurrentFolderName()}
       />
     </div>
   );
