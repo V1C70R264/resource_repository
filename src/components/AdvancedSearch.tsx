@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Search, Filter, X, Calendar, Tag, User, Star, Share2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -16,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar as CalendarIcon } from "@/components/ui/calendar";
+
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { SearchFilters } from "@/lib/types";
@@ -65,35 +64,36 @@ export function AdvancedSearch({
     filters.dateRange.end;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 min-w-0">
       {/* Search Input */}
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input
-          type="text"
-          placeholder="Search files, folders, and content..."
-          value={filters.query}
-          onChange={(e) => updateFilters({ query: e.target.value })}
-          className="pl-10 pr-4"
-        />
-        {filters.query && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => updateFilters({ query: "" })}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
-          >
-            <X className="w-3 h-3" />
-          </Button>
-        )}
+      <div className="relative flex-1 max-w-md min-w-0">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 pointer-events-none z-10" />
+        <div className="relative">
+          <DHIS2Input
+            type="text"
+            placeholder="Search files, folders, and content..."
+            value={filters.query}
+            onChange={(e) => updateFilters({ query: e.value })}
+            className="pl-10 pr-10 w-full"
+          />
+          {filters.query && (
+            <button
+              onClick={() => updateFilters({ query: "" })}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted/50 rounded flex items-center justify-center"
+              type="button"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter Button */}
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant={hasActiveFilters ? "default" : "outline"}
-            size="sm"
+          <DHIS2Button
+            {...(hasActiveFilters ? { primary: true } : { secondary: true })}
+            small
             className="gap-2"
           >
             <Filter className="w-4 h-4" />
@@ -111,21 +111,21 @@ export function AdvancedSearch({
                 ].reduce((a, b) => a + b, 0)}
               </Badge>
             )}
-          </Button>
+          </DHIS2Button>
         </PopoverTrigger>
         <PopoverContent className="w-80" align="end">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">Search Filters</h4>
               {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <DHIS2Button
+                  secondary
+                  small
                   onClick={clearFilters}
                   className="h-6 px-2 text-xs"
                 >
                   Clear all
-                </Button>
+                </DHIS2Button>
               )}
             </div>
 
@@ -184,12 +184,12 @@ export function AdvancedSearch({
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">From</label>
-                  <Input
+                  <DHIS2Input
                     type="date"
                     value={filters.dateRange.start || ""}
                     onChange={(e) =>
                       updateFilters({
-                        dateRange: { ...filters.dateRange, start: e.target.value },
+                        dateRange: { ...filters.dateRange, start: e.value },
                       })
                     }
                     className="h-8"
@@ -197,12 +197,12 @@ export function AdvancedSearch({
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">To</label>
-                  <Input
+                  <DHIS2Input
                     type="date"
                     value={filters.dateRange.end || ""}
                     onChange={(e) =>
                       updateFilters({
-                        dateRange: { ...filters.dateRange, end: e.target.value },
+                        dateRange: { ...filters.dateRange, end: e.value },
                       })
                     }
                     className="h-8"
@@ -242,24 +242,24 @@ export function AdvancedSearch({
             <div className="space-y-2">
               <label className="text-sm font-medium">Quick Filters</label>
               <div className="flex gap-2">
-                <Button
-                  variant={filters.starred ? "default" : "outline"}
-                  size="sm"
+                <DHIS2Button
+                  {...(filters.starred ? { primary: true } : { secondary: true })}
+                  small
                   onClick={() => updateFilters({ starred: !filters.starred })}
                   className="gap-1"
                 >
                   <Star className="w-3 h-3" />
                   Starred
-                </Button>
-                <Button
-                  variant={filters.shared ? "default" : "outline"}
-                  size="sm"
+                </DHIS2Button>
+                <DHIS2Button
+                  {...(filters.shared ? { primary: true } : { secondary: true })}
+                  small
                   onClick={() => updateFilters({ shared: !filters.shared })}
                   className="gap-1"
                 >
                   <Share2 className="w-3 h-3" />
                   Shared
-                </Button>
+                </DHIS2Button>
               </div>
             </div>
           </div>

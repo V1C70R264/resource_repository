@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Clock, Eye, Edit, Download, Share, Trash2, Plus, Move, Copy, Filter } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -15,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { DHIS2Input } from "@/components/ui/dhis2-components";
 import { AuditLog } from "@/lib/types";
 import { format } from "date-fns";
 
@@ -91,10 +90,10 @@ export function AuditLogDialog({ logs, isOpen, onClose }: AuditLogProps) {
               </Select>
             </div>
 
-            <Input
+            <DHIS2Input
               placeholder="Search files or users..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.value)}
               className="max-w-xs"
             />
 

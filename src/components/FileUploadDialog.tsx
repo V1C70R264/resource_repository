@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { DHIS2Button } from "@/components/ui/dhis2-components";
 import { Progress } from "@/components/ui/progress";
 import { Upload, X, File, CheckCircle2, AlertCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -163,12 +163,12 @@ export function FileUploadDialog({
             <p className="text-muted-foreground mb-4">
               You can upload multiple files at once
             </p>
-            <Button
-              variant="outline"
+            <DHIS2Button
+              secondary
               onClick={() => fileInputRef.current?.click()}
             >
               Browse files
-            </Button>
+            </DHIS2Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -222,14 +222,14 @@ export function FileUploadDialog({
                           <AlertCircle className="w-4 h-4 text-red-600" />
                         )}
                         {fileItem.status === 'pending' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          <DHIS2Button
+                            secondary
+                            small
                             className="h-8 w-8 p-0"
                             onClick={() => removeFile(fileItem.id)}
                           >
                             <X className="w-4 h-4" />
-                          </Button>
+                          </DHIS2Button>
                         )}
                       </div>
                     </div>
@@ -241,16 +241,16 @@ export function FileUploadDialog({
         </div>
 
         <div className="flex justify-between pt-4 border-t">
-          <Button variant="outline" onClick={handleClose}>
+          <DHIS2Button secondary onClick={handleClose}>
             Cancel
-          </Button>
-          <Button
-            variant="drive"
+          </DHIS2Button>
+          <DHIS2Button
+            primary
             onClick={handleUpload}
             disabled={pendingCount === 0}
           >
             Upload {pendingCount > 0 ? `${pendingCount} files` : ''}
-          </Button>
+          </DHIS2Button>
         </div>
       </DialogContent>
     </Dialog>

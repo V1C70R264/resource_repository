@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Tag, Globe, FileText, Edit3, Save, X, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -209,10 +208,10 @@ export function MetadataEditor({
 
             <div className="space-y-1">
               <label className="text-sm font-medium">Version</label>
-              <Input
+              <DHIS2Input
                 value={metadata.version || ""}
                 onChange={(e) =>
-                  setMetadata({ ...metadata, version: e.target.value })
+                  setMetadata({ ...metadata, version: e.value })
                 }
                 placeholder="e.g., 1.0, 2.1.3"
                 disabled={!isEditing}
@@ -265,20 +264,19 @@ export function MetadataEditor({
               {/* Add New Tag */}
               {isEditing && (
                 <div className="flex gap-2">
-                  <Input
+                  <DHIS2Input
                     value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    onKeyPress={handleKeyPress}
+                    onChange={(e) => setNewTag(e.value)}
                     placeholder="Add a new tag..."
                     className="flex-1"
                   />
-                  <Button
+                  <DHIS2Button
                     onClick={() => addTag(newTag)}
                     disabled={!newTag.trim()}
-                    size="sm"
+                    small
                   >
                     <Plus className="w-4 h-4" />
-                  </Button>
+                  </DHIS2Button>
                 </div>
               )}
 
@@ -344,23 +342,23 @@ export function MetadataEditor({
           <div className="flex items-center justify-end gap-2 pt-4 border-t">
             {isEditing ? (
               <>
-                <Button variant="outline" onClick={handleCancel}>
+                <DHIS2Button secondary onClick={handleCancel}>
                   Cancel
-                </Button>
-                <Button onClick={handleSave}>
+                </DHIS2Button>
+                <DHIS2Button primary onClick={handleSave}>
                   <Save className="w-4 h-4 mr-2" />
                   Save Changes
-                </Button>
+                </DHIS2Button>
               </>
             ) : (
               <>
-                <Button variant="outline" onClick={onClose}>
+                <DHIS2Button secondary onClick={onClose}>
                   Close
-                </Button>
-                <Button onClick={() => setIsEditing(true)}>
+                </DHIS2Button>
+                <DHIS2Button primary onClick={() => setIsEditing(true)}>
                   <Edit3 className="w-4 h-4 mr-2" />
                   Edit Metadata
-                </Button>
+                </DHIS2Button>
               </>
             )}
           </div>

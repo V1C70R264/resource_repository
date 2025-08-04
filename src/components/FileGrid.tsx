@@ -17,7 +17,7 @@ import {
   Tag,
   Shield
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DHIS2Button, DHIS2Card } from "@/components/ui/dhis2-components";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -57,6 +57,7 @@ interface FileGridProps {
 export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGridProps) {
   const [selectedItem, setSelectedItem] = useState<FileItem | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   const getFileIcon = (type: string, fileType?: string) => {
     if (type === 'folder') return Folder;
@@ -109,11 +110,11 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
               const iconColor = getFileColor(item.type, item.fileType);
               
               return (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-12 gap-4 p-3 hover:bg-muted/30 cursor-pointer transition-colors"
-                  onClick={() => handleItemClick(item)}
-                >
+                                 <div
+                   key={item.id}
+                   className="group grid grid-cols-12 gap-4 p-3 hover:bg-muted/30 cursor-pointer transition-colors"
+                   onClick={() => handleItemClick(item)}
+                 >
                   <div className="col-span-5 flex items-center gap-3">
                     <Icon className={`w-5 h-5 ${iconColor}`} />
                     <span className="font-medium text-foreground truncate">{item.name}</span>
@@ -136,13 +137,16 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                   <div className="col-span-2 flex items-center text-sm text-muted-foreground">
                     {item.size || '-'}
                   </div>
-                  <div className="col-span-1 flex items-center justify-end">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                                     <div className="col-span-1 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                     <DropdownMenu open={openDropdownId === item.id} onOpenChange={(open) => {
+                       console.log('Dropdown clicked:', item.id, open);
+                       setOpenDropdownId(open ? item.id : null);
+                     }}>
+                       <DropdownMenuTrigger asChild>
+                         <DHIS2Button secondary small className="h-8 w-8 p-0">
+                           <MoreVertical className="w-4 h-4" />
+                         </DHIS2Button>
+                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => onItemAction('preview', item)}>
                           <Eye className="mr-2 h-4 w-4" />
@@ -264,14 +268,14 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                   </div>
 
                   <div className="flex gap-2">
-                    <Button variant="drive" size="sm" className="flex-1">
+                    <DHIS2Button primary small className="flex-1">
                       <Download className="w-4 h-4 mr-2" />
                       Download
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
+                    </DHIS2Button>
+                    <DHIS2Button secondary small className="flex-1">
                       <Share className="w-4 h-4 mr-2" />
                       Share
-                    </Button>
+                    </DHIS2Button>
                   </div>
                 </div>
               </div>
@@ -293,10 +297,11 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
           return (
             <div
               key={item.id}
-              className="group relative bg-background border border-border rounded-lg p-4 hover:shadow-md transition-all cursor-pointer hover:border-drive-blue/30"
+              className="group relative cursor-pointer"
               onClick={() => handleItemClick(item)}
             >
-              <div className="flex flex-col items-center text-center space-y-2">
+              <DHIS2Card className="hover:shadow-md transition-all hover:border-drive-blue/30 h-32 w-full p-4">
+              <div className="flex flex-col items-center text-center space-y-2 h-full justify-center">
                 <div className="relative">
                   <Icon className={`w-12 h-12 ${iconColor}`} />
                   {item.starred && (
@@ -333,11 +338,14 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
               </div>
 
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <DropdownMenu>
+                                 <DropdownMenu open={openDropdownId === item.id} onOpenChange={(open) => {
+                   console.log('Grid dropdown clicked:', item.id, open);
+                   setOpenDropdownId(open ? item.id : null);
+                 }}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 bg-background/80 backdrop-blur-sm">
+                    <DHIS2Button secondary small className="h-6 w-6 p-0 bg-background/80 backdrop-blur-sm">
                       <MoreVertical className="w-3 h-3" />
-                    </Button>
+                    </DHIS2Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={(e) => {
@@ -404,6 +412,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+              </DHIS2Card>
             </div>
           );
         })}
@@ -488,14 +497,14 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="drive" size="sm" className="flex-1">
+                  <DHIS2Button primary small className="flex-1">
                     <Download className="w-4 h-4 mr-2" />
                     Download
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
+                  </DHIS2Button>
+                  <DHIS2Button secondary small className="flex-1">
                     <Share className="w-4 h-4 mr-2" />
                     Share
-                  </Button>
+                  </DHIS2Button>
                 </div>
               </div>
             </div>

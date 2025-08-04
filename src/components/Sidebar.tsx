@@ -11,14 +11,7 @@ import {
   ChevronDown,
   ChevronRight
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DHIS2Button, DHIS2DropdownButton, DHIS2MenuItem } from "@/components/ui/dhis2-components";
 
 interface SidebarProps {
   activeSection: string;
@@ -43,28 +36,30 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
     <aside className="w-64 bg-background border-r border-border h-full flex flex-col">
       {/* New Button */}
       <div className="p-4 border-b border-border">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="drive" className="w-full justify-start gap-3 h-12 shadow-md">
-              <Plus className="w-5 h-5" />
-              New
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="start" sideOffset={8}>
-            <DropdownMenuItem onClick={onNewFolderClick}>
-              <FolderPlus className="mr-2 h-4 w-4" />
-              New folder
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onFileUploadClick}>
-              <Upload className="mr-2 h-4 w-4" />
-              File upload
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onFolderUploadClick}>
-              <Upload className="mr-2 h-4 w-4" />
-              Folder upload
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <DHIS2DropdownButton
+          component={
+            <>
+              <DHIS2MenuItem 
+                label="New folder" 
+                onClick={onNewFolderClick}
+              />
+              <DHIS2MenuItem 
+                label="File upload" 
+                onClick={onFileUploadClick}
+              />
+              <DHIS2MenuItem 
+                label="Folder upload" 
+                onClick={onFolderUploadClick}
+              />
+            </>
+          }
+          primary
+          
+          className="w-full justify-start gap-2 h-12 shadow-md"
+          // icon={<Plus className="w-5 h-5" />}
+        >
+          New
+        </DHIS2DropdownButton>
       </div>
 
       {/* Navigation */}
@@ -76,8 +71,8 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
             
             return (
               <li key={item.id}>
-                <Button
-                  variant={isActive ? 'drive-light' : 'ghost'}
+                <DHIS2Button
+                  {...(isActive ? { primary: true } : { secondary: true })}
                   className={`w-full justify-start gap-3 h-10 px-3 ${
                     isActive ? 'bg-drive-blue-light border-drive-blue/20' : 'hover:bg-muted/50'
                   }`}
@@ -90,13 +85,13 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
                       {item.count}
                     </span>
                   )}
-                </Button>
+                </DHIS2Button>
               </li>
             );
           })}
         </ul>
 
-        {/* Storage Usage */}
+        {/* Storage Usage
         <div className="mt-8 p-3 bg-muted/30 rounded-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium">Storage</span>
@@ -139,9 +134,9 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
               <Button variant="outline" size="sm" className="w-full mt-2 h-8">
                 Buy storage
               </Button>
-            </>
-          )}
-        </div>
+            </> */}
+          {/* )}
+        </div> */}
       </nav>
     </aside>
   );

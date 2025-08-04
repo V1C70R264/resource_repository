@@ -7,9 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
 import { Folder } from "lucide-react";
 
 interface NewFolderDialogProps {
@@ -51,28 +49,34 @@ export function NewFolderDialog({ open, onOpenChange, onCreateFolder }: NewFolde
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="folder-name">Folder name</Label>
-              <Input
-                id="folder-name"
+              <label htmlFor="folder-name" className="text-sm font-medium">
+                Folder name
+              </label>
+              <DHIS2Input
                 placeholder="Untitled folder"
                 value={folderName}
-                onChange={(e) => setFolderName(e.target.value)}
-                autoFocus
+                onChange={(e) => setFolderName(e.value)}
               />
             </div>
           </div>
           
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleCancel}>
+            <DHIS2Button secondary onClick={handleCancel}>
               Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              variant="drive"
+            </DHIS2Button>
+            <DHIS2Button 
+              primary
               disabled={!folderName.trim()}
+              onClick={() => {
+                if (folderName.trim()) {
+                  onCreateFolder(folderName.trim());
+                  setFolderName("");
+                  onOpenChange(false);
+                }
+              }}
             >
               Create
-            </Button>
+            </DHIS2Button>
           </DialogFooter>
         </form>
       </DialogContent>

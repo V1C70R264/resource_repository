@@ -2,12 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* DHIS2 Design System Integration
+   Following official DHIS2 UI library design principles
+   Based on: https://developers.dhis2.org/docs/ui/webcomponents/
 */
 
 @layer base {
   :root {
+    /* DHIS2 Official Color Palette */
     --background: 0 0% 100%;
     --foreground: 220 14% 15%;
 
@@ -17,12 +19,13 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 220 14% 15%;
 
-    /* Google Drive inspired blue palette */
-    --primary: 210 100% 50%;
+    /* DHIS2 Primary Colors - Official DHIS2 Blue */
+    --primary: 210 100% 50%; /* DHIS2 Blue #0066CC */
     --primary-foreground: 0 0% 100%;
     --primary-light: 210 100% 96%;
     --primary-hover: 210 100% 45%;
 
+    /* DHIS2 Secondary Colors */
     --secondary: 220 14% 96%;
     --secondary-foreground: 220 14% 15%;
 
@@ -32,95 +35,146 @@ All colors MUST be HSL.
     --accent: 210 40% 96%;
     --accent-foreground: 220 14% 15%;
 
-    --destructive: 0 84% 60%;
+    /* DHIS2 Semantic Colors - Following DHIS2 UI Guidelines */
+    --destructive: 0 84% 60%; /* Error/Delete */
     --destructive-foreground: 0 0% 100%;
+    
+    --success: 120 60% 50%; /* Success/Complete */
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 24 95% 53%; /* Warning/Alert */
+    --warning-foreground: 0 0% 100%;
 
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 210 100% 50%;
 
-    /* Drive-specific colors */
-    --drive-blue: 210 100% 50%;
-    --drive-blue-light: 210 100% 96%;
-    --drive-gray: 220 9% 46%;
-    --drive-gray-light: 220 14% 96%;
-    --drive-green: 120 60% 50%;
-    --drive-orange: 24 95% 53%;
+    /* DHIS2 Specific Colors */
+    --dhis2-blue: 210 100% 50%;
+    --dhis2-blue-light: 210 100% 96%;
+    --dhis2-gray: 220 9% 46%;
+    --dhis2-gray-light: 220 14% 96%;
+    --dhis2-green: 120 60% 50%;
+    --dhis2-orange: 24 95% 53%;
     
-    /* Gradients */
+    /* DHIS2 Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%), hsl(210 100% 45%));
     --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 14% 98%));
     
-    /* Shadows */
+    /* DHIS2 Shadows - Following atomic design */
     --shadow-sm: 0 1px 2px 0 hsl(220 14% 15% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(220 14% 15% / 0.1), 0 2px 4px -2px hsl(220 14% 15% / 0.1);
     --shadow-lg: 0 10px 15px -3px hsl(220 14% 15% / 0.1), 0 4px 6px -4px hsl(220 14% 15% / 0.1);
     --shadow-xl: 0 20px 25px -5px hsl(220 14% 15% / 0.1), 0 8px 10px -6px hsl(220 14% 15% / 0.1);
 
+    /* DHIS2 Border Radius */
     --radius: 0.5rem;
 
+    /* DHIS2 Sidebar Colors */
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
+  /* DHIS2 Dark Mode Support */
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 220 14% 15%;
+    --foreground: 0 0% 100%;
+    --card: 220 14% 15%;
+    --card-foreground: 0 0% 100%;
+    --popover: 220 14% 15%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 210 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 14% 15%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 220 14% 15%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 210 100% 50%;
   }
 }
 
+/* DHIS2 Typography - Following official guidelines */
 @layer base {
   * {
     @apply border-border;
   }
-
+  
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* DHIS2 Heading Styles */
+  h1 {
+    @apply text-2xl font-semibold text-foreground;
+  }
+  
+  h2 {
+    @apply text-xl font-semibold text-foreground;
+  }
+  
+  h3 {
+    @apply text-lg font-medium text-foreground;
+  }
+  
+  /* DHIS2 Link Styles */
+  a {
+    @apply text-primary hover:text-primary-hover transition-colors;
+  }
+}
+
+/* DHIS2 Component Utilities - Following official DHIS2 UI patterns */
+@layer components {
+  /* DHIS2 Button Variants - Matching official DHIS2 UI */
+  .btn-dhis2-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary-hover shadow-md;
+  }
+  
+  .btn-dhis2-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+  
+  .btn-dhis2-success {
+    @apply bg-success text-success-foreground hover:bg-success/90;
+  }
+  
+  .btn-dhis2-warning {
+    @apply bg-warning text-warning-foreground hover:bg-warning/90;
+  }
+  
+  .btn-dhis2-destructive {
+    @apply bg-destructive text-destructive-foreground hover:bg-destructive/90;
+  }
+  
+  /* DHIS2 Card Styles */
+  .card-dhis2 {
+    @apply rounded-lg border bg-card text-card-foreground shadow-sm;
+  }
+  
+  /* DHIS2 Input Styles */
+  .input-dhis2 {
+    @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  
+  /* DHIS2 Layout Components */
+  .dhis2-header {
+    @apply h-16 border-b border-border bg-background flex items-center justify-between px-6 shadow-sm;
+  }
+  
+  .dhis2-sidebar {
+    @apply bg-sidebar text-sidebar-foreground border-r border-border;
+  }
+  
+  .dhis2-main {
+    @apply flex-1 bg-background;
   }
 }

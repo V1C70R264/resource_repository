@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Download, Share, Edit, ZoomIn, ZoomOut, RotateCw, FileText, Image, Video, Music, Archive } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DHIS2Button } from "@/components/ui/dhis2-components";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -146,10 +146,10 @@ export function FilePreview({
           Preview not available for this file type
         </p>
         <div className="flex gap-2">
-          <Button onClick={onDownload} variant="outline">
+          <DHIS2Button secondary onClick={onDownload}>
             <Download className="w-4 h-4 mr-2" />
             Download
-          </Button>
+          </DHIS2Button>
         </div>
       </div>
     );
@@ -176,67 +176,67 @@ export function FilePreview({
               {/* Zoom Controls */}
               {(isImage || isVideo) && (
                 <div className="flex items-center gap-1 border rounded-lg p-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <DHIS2Button
+                    secondary
+                    small
                     onClick={handleZoomOut}
                     disabled={zoom <= 25}
                     className="h-8 w-8 p-0"
                   >
                     <ZoomOut className="w-4 h-4" />
-                  </Button>
+                  </DHIS2Button>
                   <span className="text-sm px-2">{zoom}%</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <DHIS2Button
+                    secondary
+                    small
                     onClick={handleZoomIn}
                     disabled={zoom >= 200}
                     className="h-8 w-8 p-0"
                   >
                     <ZoomIn className="w-4 h-4" />
-                  </Button>
+                  </DHIS2Button>
                 </div>
               )}
 
               {/* Rotation Control */}
               {isImage && (
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <DHIS2Button
+                  secondary
+                  small
                   onClick={handleRotate}
                   className="h-8 w-8 p-0"
                 >
                   <RotateCw className="w-4 h-4" />
-                </Button>
+                </DHIS2Button>
               )}
 
               {/* Reset */}
               {(isImage || isVideo) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <DHIS2Button
+                  secondary
+                  small
                   onClick={handleReset}
                   className="h-8 w-8 p-0"
                 >
                   Reset
-                </Button>
+                </DHIS2Button>
               )}
 
               {/* Action Buttons */}
-              <Button variant="ghost" size="sm" onClick={onDownload}>
+              <DHIS2Button secondary small onClick={onDownload}>
                 <Download className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onShare}>
+              </DHIS2Button>
+              <DHIS2Button secondary small onClick={onShare}>
                 <Share className="w-4 h-4" />
-              </Button>
+              </DHIS2Button>
               {file.canEdit && (
-                <Button variant="ghost" size="sm" onClick={onEdit}>
+                <DHIS2Button secondary small onClick={onEdit}>
                   <Edit className="w-4 h-4" />
-                </Button>
+                </DHIS2Button>
               )}
-              <Button variant="ghost" size="sm" onClick={onClose}>
+              <DHIS2Button secondary small onClick={onClose}>
                 <X className="w-4 h-4" />
-              </Button>
+              </DHIS2Button>
             </div>
           </div>
         </DialogHeader>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
+import { DHIS2Card } from "@/components/ui/dhis2-components";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Breadcrumb } from "./Breadcrumb";
@@ -606,13 +607,13 @@ export function ResourceRepository() {
             <div className="mb-6">
               {isDragOver && (
                 <div className="fixed inset-0 bg-drive-blue/10 backdrop-blur-sm z-50 flex items-center justify-center">
-                  <div className="bg-background border-2 border-dashed border-drive-blue rounded-lg p-8 text-center">
+                  <DHIS2Card className="border-2 border-dashed border-drive-blue p-8 text-center w-96 h-64">
                     <Upload className="w-16 h-16 text-drive-blue mx-auto mb-4" />
                     <h3 className="text-xl font-semibold mb-2">Drop files here</h3>
                     <p className="text-muted-foreground">
                       Upload files to {getCurrentFolderName()}
                     </p>
-                  </div>
+                  </DHIS2Card>
                 </div>
               )}
               

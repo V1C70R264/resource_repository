@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Shield, User, Users, Lock, Unlock, Plus, Trash2, Edit, Eye } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -154,17 +153,17 @@ export function AccessControlDialog({
 
               <div className="space-y-1">
                 <label className="text-sm font-medium">Expires (optional)</label>
-                <Input
+                <DHIS2Input
                   type="date"
                   value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
+                  onChange={(e) => setExpiryDate(e.value)}
                 />
               </div>
             </div>
 
-            <Button onClick={handleAddPermission} disabled={!selectedUser}>
+            <DHIS2Button primary onClick={handleAddPermission} disabled={!selectedUser}>
               Add Permission
-            </Button>
+            </DHIS2Button>
           </div>
 
           {/* Current Permissions */}
@@ -229,9 +228,9 @@ export function AccessControlDialog({
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <DHIS2Button secondary small>
                               <Edit className="w-4 h-4" />
-                            </Button>
+                            </DHIS2Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent>
                             <DropdownMenuItem>Edit Permission</DropdownMenuItem>
