@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
 import { DHIS2Card } from "@/components/ui/dhis2-components";
 import { Header } from "./Header";
@@ -14,6 +14,7 @@ import { AccessControlDialog } from "./AccessControl";
 import { FilePreview } from "./FilePreview";
 import { MetadataEditor } from "./MetadataEditor";
 import { toast } from "sonner";
+import { useDHIS2DataStore } from "@/hooks/useDHIS2DataStore";
 import { 
   FileMetadata, 
   AuditLog, 
@@ -23,7 +24,7 @@ import {
   PreviewData 
 } from "@/lib/types";
 
-interface FileItem extends FileMetadata {
+export interface FileItem extends FileMetadata {
   parentId?: string;
 }
 
@@ -201,7 +202,6 @@ export function ResourceRepository() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState('my-drive');
-  const [files, setFiles] = useState<FileItem[]>(sampleFiles);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { id: 'root', name: 'My Drive', path: '/' }
@@ -221,15 +221,6 @@ export function ResourceRepository() {
     starred: false,
     shared: false,
   });
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [users, setUsers] = useState<User[]>([
-    { id: '1', name: 'John Doe', email: 'john@company.com', role: 'admin', permissions: ['read', 'write', 'admin'] },
-    { id: '2', name: 'Jane Smith', email: 'jane@company.com', role: 'editor', permissions: ['read', 'write'] },
-    { id: '3', name: 'Mike Johnson', email: 'mike@company.com', role: 'viewer', permissions: ['read'] },
-    { id: '4', name: 'Sarah Wilson', email: 'sarah@company.com', role: 'editor', permissions: ['read', 'write'] },
-    { id: '5', name: 'Alex Brown', email: 'alex@company.com', role: 'viewer', permissions: ['read'] },
-  ]);
-  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [previewFile, setPreviewFile] = useState<PreviewData | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
@@ -237,7 +228,25 @@ export function ResourceRepository() {
   const [showMetadataEditor, setShowMetadataEditor] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
 
-  const filteredFiles = files.filter(file => {
+  // DHIS2 Data Store integration
+  const {
+    files: dhis2Files,
+    folders: dhis2Folders,
+    users: dhis2Users,
+    auditLogs: dhis2AuditLogs,
+    permissions: dhis2Permissions,
+    saveFile,
+    saveFolder,
+    saveAuditLog,
+    savePermissions,
+    isLoading,
+    hasError
+  } = useDHIS2DataStore();
+
+  // Combine files and folders from DHIS2
+  const allFiles = [...dhis2Files, ...dhis2Folders];
+
+  const filteredFiles = allFiles.filter(file => {
     const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          file.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     
@@ -297,7 +306,7 @@ export function ResourceRepository() {
             timestamp: new Date().toISOString(),
             details: 'File previewed',
           };
-          setAuditLogs(prev => [auditLog, ...prev]);
+          saveAuditLog(auditLog);
         }
         break;
       case 'download':
@@ -307,9 +316,12 @@ export function ResourceRepository() {
         toast(`Sharing: ${item.name}`);
         break;
       case 'star':
-        setFiles(prev => prev.map(f => 
-          f.id === item.id ? { ...f, starred: !f.starred } : f
-        ));
+        const updatedItem = { ...item, starred: !item.starred };
+        if (item.type === 'file') {
+          saveFile(updatedItem);
+        } else {
+          saveFolder(updatedItem);
+        }
         toast(`${item.starred ? 'Removed star from' : 'Starred'}: ${item.name}`);
         break;
       case 'delete':
@@ -363,11 +375,11 @@ export function ResourceRepository() {
       shared: false,
       tags: ['folder'],
       parentId: currentFolderId || undefined,
-      created: "",
+      created: new Date().toISOString(),
       path: ""
     };
     
-    setFiles(prev => [...prev, newFolder]);
+    saveFolder(newFolder);
     toast(`Created folder: ${name}`);
   };
 
@@ -383,7 +395,7 @@ export function ResourceRepository() {
     setShowFolderUploadDialog(true);
   };
 
-  const handleFileUploadComplete = (uploadedFiles: File[], folderId?: string) => {
+  const handleFileUploadComplete = async (uploadedFiles: File[], folderId?: string) => {
     const newFiles: FileItem[] = uploadedFiles.map(file => {
       const fileType = getFileType(file.name);
       return {
@@ -391,7 +403,8 @@ export function ResourceRepository() {
         name: file.name,
         type: 'file',
         fileType,
-        size: formatFileSize(file.size),
+        size: file.size,
+        sizeFormatted: formatFileSize(file.size),
         modified: new Date().toLocaleDateString('en-US', { 
           year: 'numeric', 
           month: 'short', 
@@ -401,15 +414,20 @@ export function ResourceRepository() {
         starred: false,
         shared: false,
         tags: [fileType],
-        parentId: folderId || undefined
+        parentId: folderId || undefined,
+        created: new Date().toISOString(),
+        path: ""
       };
     });
     
-    setFiles(prev => [...prev, ...newFiles]);
+    // Save files to DHIS2 Data Store
+    for (const file of newFiles) {
+      await saveFile(file);
+    }
     toast(`Uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
   };
 
-  const handleFolderUploadComplete = (uploadedFolders: { name: string; files: File[] }[], folderId?: string) => {
+  const handleFolderUploadComplete = async (uploadedFolders: { name: string; files: File[] }[], folderId?: string) => {
     const newItems: FileItem[] = [];
     
     uploadedFolders.forEach(folder => {
@@ -429,7 +447,7 @@ export function ResourceRepository() {
         shared: false,
         tags: ['folder'],
         parentId: currentFolderId || undefined,
-        created: "",
+        created: new Date().toISOString(),
         path: ""
       };
       newItems.push(folderItem);
@@ -442,23 +460,33 @@ export function ResourceRepository() {
           name: file.name,
           type: 'file',
           fileType,
-          size: formatFileSize(file.size),
-          modified: new Date().toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
+          size: file.size,
+          sizeFormatted: formatFileSize(file.size),
+          modified: new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
           }),
           owner: 'You',
           starred: false,
           shared: false,
           tags: [fileType],
-          parentId: folderId
+          parentId: folderId,
+          created: new Date().toISOString(),
+          path: ""
         };
         newItems.push(fileItem);
       });
     });
     
-    setFiles(prev => [...prev, ...newItems]);
+    // Save folders and files to DHIS2 Data Store
+    for (const item of newItems) {
+      if (item.type === 'file') {
+        await saveFile(item);
+      } else {
+        await saveFolder(item);
+      }
+    }
     toast(`Uploaded ${uploadedFolders.length} folder${uploadedFolders.length > 1 ? 's' : ''}`);
   };
 
@@ -515,25 +543,29 @@ export function ResourceRepository() {
   };
 
   const handleMetadataSave = (metadata: FileMetadata) => {
-    setFiles(prev => prev.map(f => 
-      f.id === metadata.id ? { ...f, ...metadata } : f
-    ));
+    if (metadata.type === 'file') {
+      saveFile(metadata as any);
+    } else {
+      saveFolder(metadata as any);
+    }
     toast('Metadata updated successfully');
     setShowMetadataEditor(false);
   };
 
   const handlePermissionChange = (permission: Permission, action: 'add' | 'update' | 'remove') => {
+    let updated: Permission[] = [];
     switch (action) {
       case 'add':
-        setPermissions(prev => [...prev, permission]);
+        updated = [...dhis2Permissions, permission];
         break;
       case 'update':
-        setPermissions(prev => prev.map(p => p.id === permission.id ? permission : p));
+        updated = dhis2Permissions.map(p => p.id === permission.id ? permission : p);
         break;
       case 'remove':
-        setPermissions(prev => prev.filter(p => p.id !== permission.id));
+        updated = dhis2Permissions.filter(p => p.id !== permission.id);
         break;
     }
+    savePermissions(updated);
     toast(`Permission ${action}ed successfully`);
   };
 
@@ -555,29 +587,26 @@ export function ResourceRepository() {
   };
 
   // Get available data for filters
-  const availableTags = Array.from(new Set(files.flatMap(f => f.tags || [])));
-  const availableFileTypes = Array.from(new Set(files.map(f => f.fileType).filter(Boolean)));
-  const availableOwners = Array.from(new Set(files.map(f => f.owner)));
+  const availableTags = Array.from(new Set(allFiles.flatMap(f => f.tags || []))) as string[];
+  const availableFileTypes = Array.from(new Set(allFiles.map(f => f.fileType).filter(Boolean))) as string[];
+  const availableOwners = Array.from(new Set(allFiles.map(f => f.owner))) as string[];
 
   return (
     <div className="h-screen bg-gradient-to-br from-background to-muted/20 flex flex-col">
-              <Header
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+              <Header />
         
-        {/* Enhanced Search Bar */}
-        <div className="px-6 py-3 border-b bg-muted/30">
-          <AdvancedSearch
-            filters={searchFilters}
-            onFiltersChange={handleSearchFiltersChange}
-            availableTags={availableTags}
-            availableFileTypes={availableFileTypes}
-            availableOwners={availableOwners}
-          />
-        </div>
+                 {/* Enhanced Search Bar */}
+         <div className="px-6 py-3 border-b bg-muted/30">
+           <AdvancedSearch
+             filters={searchFilters}
+             onFiltersChange={handleSearchFiltersChange}
+             availableTags={availableTags}
+             availableFileTypes={availableFileTypes}
+             availableOwners={availableOwners}
+             viewMode={viewMode}
+             onViewModeChange={setViewMode}
+           />
+         </div>
       
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
@@ -703,8 +732,8 @@ export function ResourceRepository() {
           <AccessControlDialog
             fileId={selectedFile.id}
             fileName={selectedFile.name}
-            permissions={permissions}
-            users={users}
+            permissions={dhis2Permissions}
+            users={dhis2Users}
             isOpen={showAccessControl}
             onClose={() => setShowAccessControl(false)}
             onPermissionChange={handlePermissionChange}
@@ -713,7 +742,7 @@ export function ResourceRepository() {
       )}
 
       <AuditLogDialog
-        logs={auditLogs}
+        logs={dhis2AuditLogs}
         isOpen={showAuditLog}
         onClose={() => setShowAuditLog(false)}
       />

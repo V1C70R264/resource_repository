@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Filter, X, Calendar, Tag, User, Star, Share2 } from "lucide-react";
+import { Search, Filter, X, Calendar, Tag, User, Star, Share2, Grid3X3, List } from "lucide-react";
 import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +26,8 @@ interface AdvancedSearchProps {
   availableTags: string[];
   availableFileTypes: string[];
   availableOwners: string[];
+  viewMode: 'grid' | 'list';
+  onViewModeChange: (mode: 'grid' | 'list') => void;
 }
 
 export function AdvancedSearch({
@@ -34,6 +36,8 @@ export function AdvancedSearch({
   availableTags,
   availableFileTypes,
   availableOwners,
+  viewMode,
+  onViewModeChange,
 }: AdvancedSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -122,9 +126,8 @@ export function AdvancedSearch({
                   secondary
                   small
                   onClick={clearFilters}
-                  className="h-6 px-2 text-xs"
                 >
-                  Clear all
+                  Clear All
                 </DHIS2Button>
               )}
             </div>
@@ -132,22 +135,27 @@ export function AdvancedSearch({
             {/* File Types */}
             <div className="space-y-2">
               <label className="text-sm font-medium">File Types</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2 max-h-32 overflow-y-auto">
                 {availableFileTypes.map((type) => (
                   <div key={type} className="flex items-center space-x-2">
                     <Checkbox
                       id={`type-${type}`}
                       checked={filters.fileTypes.includes(type)}
                       onCheckedChange={(checked) => {
-                        const newTypes = checked
-                          ? [...filters.fileTypes, type]
-                          : filters.fileTypes.filter((t) => t !== type);
-                        updateFilters({ fileTypes: newTypes });
+                        if (checked) {
+                          updateFilters({
+                            fileTypes: [...filters.fileTypes, type],
+                          });
+                        } else {
+                          updateFilters({
+                            fileTypes: filters.fileTypes.filter((t) => t !== type),
+                          });
+                        }
                       }}
                     />
                     <label
                       htmlFor={`type-${type}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      className="text-sm cursor-pointer"
                     >
                       {type}
                     </label>
@@ -159,77 +167,59 @@ export function AdvancedSearch({
             {/* Tags */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Tags</label>
-              <div className="flex flex-wrap gap-1">
+              <div className="space-y-2 max-h-32 overflow-y-auto">
                 {availableTags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant={filters.tags.includes(tag) ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => {
-                      const newTags = filters.tags.includes(tag)
-                        ? filters.tags.filter((t) => t !== tag)
-                        : [...filters.tags, tag];
-                      updateFilters({ tags: newTags });
-                    }}
-                  >
-                    {tag}
-                  </Badge>
+                  <div key={tag} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`tag-${tag}`}
+                      checked={filters.tags.includes(tag)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          updateFilters({
+                            tags: [...filters.tags, tag],
+                          });
+                        } else {
+                          updateFilters({
+                            tags: filters.tags.filter((t) => t !== tag),
+                          });
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor={`tag-${tag}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {tag}
+                    </label>
+                  </div>
                 ))}
-              </div>
-            </div>
-
-            {/* Date Range */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Date Range</label>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">From</label>
-                  <DHIS2Input
-                    type="date"
-                    value={filters.dateRange.start || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        dateRange: { ...filters.dateRange, start: e.value },
-                      })
-                    }
-                    className="h-8"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">To</label>
-                  <DHIS2Input
-                    type="date"
-                    value={filters.dateRange.end || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        dateRange: { ...filters.dateRange, end: e.value },
-                      })
-                    }
-                    className="h-8"
-                  />
-                </div>
               </div>
             </div>
 
             {/* Owners */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Owners</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-2 max-h-32 overflow-y-auto">
                 {availableOwners.map((owner) => (
                   <div key={owner} className="flex items-center space-x-2">
                     <Checkbox
                       id={`owner-${owner}`}
                       checked={filters.owners.includes(owner)}
                       onCheckedChange={(checked) => {
-                        const newOwners = checked
-                          ? [...filters.owners, owner]
-                          : filters.owners.filter((o) => o !== owner);
-                        updateFilters({ owners: newOwners });
+                        if (checked) {
+                          updateFilters({
+                            owners: [...filters.owners, owner],
+                          });
+                        } else {
+                          updateFilters({
+                            owners: filters.owners.filter((o) => o !== owner),
+                          });
+                        }
                       }}
                     />
                     <label
                       htmlFor={`owner-${owner}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      className="text-sm cursor-pointer"
                     >
                       {owner}
                     </label>
@@ -238,33 +228,94 @@ export function AdvancedSearch({
               </div>
             </div>
 
+            {/* Date Range */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date Range</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">From</label>
+                  <input
+                    type="date"
+                    value={filters.dateRange.start || ""}
+                    onChange={(e) =>
+                      updateFilters({
+                        dateRange: { ...filters.dateRange, start: e.target.value },
+                      })
+                    }
+                    className="w-full px-2 py-1 text-sm border rounded"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">To</label>
+                  <input
+                    type="date"
+                    value={filters.dateRange.end || ""}
+                    onChange={(e) =>
+                      updateFilters({
+                        dateRange: { ...filters.dateRange, end: e.target.value },
+                      })
+                    }
+                    className="w-full px-2 py-1 text-sm border rounded"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Quick Filters */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Quick Filters</label>
-              <div className="flex gap-2">
-                <DHIS2Button
-                  {...(filters.starred ? { primary: true } : { secondary: true })}
-                  small
-                  onClick={() => updateFilters({ starred: !filters.starred })}
-                  className="gap-1"
-                >
-                  <Star className="w-3 h-3" />
-                  Starred
-                </DHIS2Button>
-                <DHIS2Button
-                  {...(filters.shared ? { primary: true } : { secondary: true })}
-                  small
-                  onClick={() => updateFilters({ shared: !filters.shared })}
-                  className="gap-1"
-                >
-                  <Share2 className="w-3 h-3" />
-                  Shared
-                </DHIS2Button>
+              <div className="flex flex-wrap gap-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="starred"
+                    checked={filters.starred}
+                    onCheckedChange={(checked) =>
+                      updateFilters({ starred: checked as boolean })
+                    }
+                  />
+                  <label htmlFor="starred" className="text-sm cursor-pointer">
+                    Starred
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="shared"
+                    checked={filters.shared}
+                    onCheckedChange={(checked) =>
+                      updateFilters({ shared: checked as boolean })
+                    }
+                  />
+                  <label htmlFor="shared" className="text-sm cursor-pointer">
+                    Shared
+                  </label>
+                </div>
               </div>
             </div>
           </div>
         </PopoverContent>
       </Popover>
+
+      {/* View Toggle - Only show if onViewModeChange is provided */}
+      {onViewModeChange && viewMode && (
+        <div className="flex border border-border rounded-lg p-1 bg-muted/50 ml-2">
+          <DHIS2Button
+            primary={viewMode === 'grid'}
+            small
+            onClick={() => onViewModeChange('grid')}
+            className="h-8 w-8 p-0"
+          >
+            <Grid3X3 className="w-4 h-4" />
+          </DHIS2Button>
+          <DHIS2Button
+            primary={viewMode === 'list'}
+            small
+            onClick={() => onViewModeChange('list')}
+            className="h-8 w-8 p-0"
+          >
+            <List className="w-4 h-4" />
+          </DHIS2Button>
+        </div>
+      )}
     </div>
   );
 } 

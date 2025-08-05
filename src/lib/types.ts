@@ -21,6 +21,12 @@ export interface FileMetadata {
   path: string;
 }
 
+export interface FileItem extends FileMetadata {
+  parentId?: string;
+}
+
+
+
 export interface AuditLog {
   id: string;
   fileId: string;

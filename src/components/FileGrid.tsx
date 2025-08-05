@@ -32,20 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-interface FileItem {
-  id: string;
-  name: string;
-  type: 'folder' | 'file';
-  fileType?: string;
-  size?: string;
-  modified: string;
-  owner: string;
-  starred: boolean;
-  shared: boolean;
-  thumbnail?: string;
-  tags?: string[];
-}
+import { FileItem } from '@/lib/types';
 
 interface FileGridProps {
   items: FileItem[];
@@ -135,7 +122,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                     {item.modified}
                   </div>
                   <div className="col-span-2 flex items-center text-sm text-muted-foreground">
-                    {item.size || '-'}
+                    {item.sizeFormatted || '-'}
                   </div>
                                      <div className="col-span-1 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                      <DropdownMenu open={openDropdownId === item.id} onOpenChange={(open) => {

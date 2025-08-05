@@ -26,7 +26,7 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
 
   const navigationItems = [
     { id: 'my-drive', label: 'My Drive', icon: HardDrive, count: 156 },
-    { id: 'shared', label: 'Shared with me', icon: Users, count: 23 },
+    { id: 'shared', label: 'Shared Items', icon: Users, count: 23 },
     { id: 'recent', label: 'Recent', icon: Clock, count: 45 },
     { id: 'starred', label: 'Starred', icon: Star, count: 12 },
     { id: 'trash', label: 'Trash', icon: Trash2, count: 8 },
