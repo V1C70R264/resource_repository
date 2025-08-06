@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@dhis2/ui';
-import { IconRefresh24, IconInfo24 } from '@dhis2/ui-icons';
+import { IconClock24, IconInfo24 } from '@dhis2/ui-icons';
 
 interface DebugPanelProps {
   dhis2Files: any[];
@@ -126,7 +126,9 @@ export function DebugPanel({
             style={{ fontSize: '12px', padding: '4px 8px', width: '100%' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <IconRefresh24 style={{ width: '12px', height: '12px' }} />
+              <div style={{ width: '12px', height: '12px' }}>
+                <IconClock24 />
+              </div>
               Refresh Data
             </div>
           </Button>

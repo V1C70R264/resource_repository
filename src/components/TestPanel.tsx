@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Input } from '@dhis2/ui';
-import { IconAdd24, IconRefresh24 } from '@dhis2/ui-icons';
+import { IconAdd24, IconClock24 } from '@dhis2/ui-icons';
 
 interface TestPanelProps {
   onCreateFolder: (name: string) => Promise<void>;
@@ -68,7 +68,9 @@ export function TestPanel({ onCreateFolder, onRefresh }: TestPanelProps) {
         style={{ width: '100%' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <IconRefresh24 style={{ width: '14px', height: '14px' }} />
+          <div style={{ width: '14px', height: '14px' }}>
+            <IconClock24 />
+          </div>
           Refresh Data
         </div>
       </Button>
