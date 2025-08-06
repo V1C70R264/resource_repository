@@ -1,14 +1,6 @@
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
-import { Folder } from "lucide-react";
+import { Modal, Input, Button } from "@dhis2/ui";
+import { IconFolder24 } from "@dhis2/ui-icons";
 
 interface NewFolderDialogProps {
   open: boolean;
@@ -34,37 +26,64 @@ export function NewFolderDialog({ open, onOpenChange, onCreateFolder }: NewFolde
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Folder className="w-5 h-5 text-drive-blue" />
-            New folder
-          </DialogTitle>
-          <DialogDescription>
-            Create a new folder to organize your files.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      {open && (
+        <Modal
+          onClose={() => onOpenChange(false)}
+        >
+          <div style={{ padding: '24px' }}>
+        {/* Header */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px', 
+          marginBottom: '16px',
+          fontSize: '18px',
+          fontWeight: '600'
+        }}>
+          <IconFolder24 />
+          New folder
+        </div>
+        
+        <div style={{ 
+          color: '#666', 
+          marginBottom: '24px',
+          fontSize: '14px'
+        }}>
+          Create a new folder to organize your files.
+        </div>
         
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="folder-name" className="text-sm font-medium">
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ marginBottom: '8px' }}>
+              <label htmlFor="folder-name" style={{ 
+                fontSize: '14px', 
+                fontWeight: '500',
+                display: 'block',
+                marginBottom: '4px'
+              }}>
                 Folder name
               </label>
-              <DHIS2Input
-                placeholder="Untitled folder"
-                value={folderName}
-                onChange={(e) => setFolderName(e.value)}
-              />
             </div>
+            <Input
+              placeholder="Untitled folder"
+              value={folderName}
+              onChange={(e) => setFolderName(e.value)}
+            />
           </div>
           
-          <DialogFooter>
-            <DHIS2Button secondary onClick={handleCancel}>
+          {/* Footer */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'flex-end', 
+            gap: '12px',
+            borderTop: '1px solid #e1e5e9',
+            paddingTop: '16px'
+          }}>
+            <Button secondary onClick={handleCancel}>
               Cancel
-            </DHIS2Button>
-            <DHIS2Button 
+            </Button>
+            <Button 
               primary
               disabled={!folderName.trim()}
               onClick={() => {
@@ -76,10 +95,12 @@ export function NewFolderDialog({ open, onOpenChange, onCreateFolder }: NewFolde
               }}
             >
               Create
-            </DHIS2Button>
-          </DialogFooter>
+            </Button>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </div>
+        </Modal>
+      )}
+    </>
   );
 }

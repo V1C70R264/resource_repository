@@ -1,15 +1,10 @@
 import { useState, useRef } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { DHIS2Button } from "@/components/ui/dhis2-components";
-import { Progress } from "@/components/ui/progress";
-import { FolderUp, X, Folder, CheckCircle2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Modal, Button } from "@dhis2/ui";
+import { 
+  IconFolder24, 
+  IconCheckmark24,
+  IconUpload24
+} from "@dhis2/ui-icons";
 
 interface FolderUploadItem {
   id: string;
@@ -146,128 +141,220 @@ export function FolderUploadDialog({
   const totalCount = uploadFolders.length;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FolderUp className="w-5 h-5 text-drive-blue" />
-            Upload folders
-          </DialogTitle>
-          <DialogDescription>
-            {currentFolderName 
-              ? `Upload folders to "${currentFolderName}" folder`
-              : "Upload folders to My Drive"
-            }
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 space-y-4">
-          {/* Drop Zone */}
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              isDragOver 
-                ? 'border-drive-blue bg-drive-blue/5' 
-                : 'border-muted-foreground/25 hover:border-drive-blue/50'
-            }`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <FolderUp className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">
-              Select folders to upload
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              Upload entire folders with all their contents
-            </p>
-            <DHIS2Button
-              secondary
-              onClick={() => folderInputRef.current?.click()}
-            >
-              Browse folders
-            </DHIS2Button>
-            <input
-              ref={folderInputRef}
-              type="file"
-              {...({ webkitdirectory: "" } as any)}
-              multiple
-              className="hidden"
-              onChange={(e) => handleFolderSelect(e.target.files)}
-            />
-          </div>
-
-          {/* Folder List */}
-          {uploadFolders.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">
-                  Folders to upload ({totalCount})
-                </h4>
-                {completedCount > 0 && (
-                  <span className="text-sm text-muted-foreground">
-                    {completedCount} of {totalCount} completed
-                  </span>
-                )}
+    <>
+      {open && (
+        <Modal
+          onClose={() => onOpenChange(false)}
+        >
+          <div style={{ padding: '24px', maxWidth: '600px', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
+            {/* Header */}
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                marginBottom: '8px',
+                fontSize: '18px',
+                fontWeight: '600'
+              }}>
+                <IconUpload24 />
+                Upload folders
               </div>
-              
-              <ScrollArea className="max-h-60">
-                <div className="space-y-2">
-                  {uploadFolders.map((folderItem) => (
-                    <div
-                      key={folderItem.id}
-                      className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg"
-                    >
-                      <Folder className="w-4 h-4 text-drive-blue" />
-                      
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {folderItem.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatFileCount(folderItem.files.length)}
-                        </p>
-                        
-                        {folderItem.status === 'uploading' && (
-                          <Progress value={folderItem.progress} className="h-1 mt-1" />
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {folderItem.status === 'completed' && (
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        )}
-                        {folderItem.status === 'pending' && (
-                          <DHIS2Button
-                            secondary
-                            small
-                            className="h-8 w-8 p-0"
-                            onClick={() => removeFolder(folderItem.id)}
-                          >
-                            <X className="w-4 h-4" />
-                          </DHIS2Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+              <div style={{ 
+                color: '#666', 
+                fontSize: '14px'
+              }}>
+                {currentFolderName 
+                  ? `Upload folders to "${currentFolderName}" folder`
+                  : "Upload folders to My Drive"
+                }
+              </div>
             </div>
-          )}
-        </div>
 
-        <div className="flex justify-between pt-4 border-t">
-          <DHIS2Button secondary onClick={handleClose}>
-            Cancel
-          </DHIS2Button>
-          <DHIS2Button
-            primary
-            onClick={handleUpload}
-            disabled={pendingCount === 0}
-          >
-            Upload {pendingCount > 0 ? `${pendingCount} folders` : ''}
-          </DHIS2Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Drop Zone */}
+              <div
+                style={{
+                  border: `2px dashed ${isDragOver ? '#2196f3' : '#e1e5e9'}`,
+                  borderRadius: '8px',
+                  padding: '24px',
+                  textAlign: 'center',
+                  backgroundColor: isDragOver ? '#e3f2fd' : 'transparent',
+                  transition: 'all 0.2s ease'
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <div style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  color: '#666',
+                  margin: '0 auto 12px auto',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}>
+                  <IconFolder24 />
+                </div>
+                <h3 style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '500', 
+                  marginBottom: '6px',
+                  color: '#333'
+                }}>
+                  Select folders to upload
+                </h3>
+                <p style={{ 
+                  color: '#666', 
+                  marginBottom: '12px',
+                  fontSize: '14px'
+                }}>
+                  Upload entire folders with all their contents
+                </p>
+                <Button
+                  secondary
+                  onClick={() => folderInputRef.current?.click()}
+                >
+                  Browse folders
+                </Button>
+                <input
+                  ref={folderInputRef}
+                  type="file"
+                  {...({ webkitdirectory: "" } as any)}
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFolderSelect(e.target.files)}
+                />
+              </div>
+
+              {/* Folder List */}
+              {uploadFolders.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between'
+                  }}>
+                    <h4 style={{ fontWeight: '500', fontSize: '16px' }}>
+                      Folders to upload ({totalCount})
+                    </h4>
+                    {completedCount > 0 && (
+                      <span style={{ 
+                        fontSize: '14px', 
+                        color: '#666'
+                      }}>
+                        {completedCount} of {totalCount} completed
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div style={{ 
+                    maxHeight: '200px', 
+                    overflowY: 'auto',
+                    border: '1px solid #e1e5e9',
+                    borderRadius: '8px',
+                    padding: '8px'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {uploadFolders.map((folderItem) => (
+                        <div
+                          key={folderItem.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '8px',
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          <div style={{ color: '#2196f3' }}>
+                            <IconFolder24 />
+                          </div>
+                          
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ 
+                              fontSize: '14px', 
+                              fontWeight: '500',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {folderItem.name}
+                            </p>
+                            <p style={{ 
+                              fontSize: '12px', 
+                              color: '#666'
+                            }}>
+                              {formatFileCount(folderItem.files.length)}
+                            </p>
+                            
+                            {folderItem.status === 'uploading' && (
+                              <div style={{ 
+                                height: '4px', 
+                                backgroundColor: '#e1e5e9', 
+                                borderRadius: '2px', 
+                                marginTop: '4px',
+                                overflow: 'hidden'
+                              }}>
+                                <div style={{ 
+                                  width: `${folderItem.progress}%`, 
+                                  height: '100%', 
+                                  backgroundColor: '#2196f3', 
+                                  borderRadius: '2px',
+                                  transition: 'width 0.3s ease'
+                                }} />
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {folderItem.status === 'completed' && (
+                              <div style={{ color: '#4caf50' }}>
+                                <IconCheckmark24 />
+                              </div>
+                            )}
+                            {folderItem.status === 'pending' && (
+                              <Button
+                                secondary
+                                onClick={() => removeFolder(folderItem.id)}
+                                style={{ padding: '4px', minWidth: '32px', height: '32px' }}
+                              >
+                                ×
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              paddingTop: '16px',
+              borderTop: '1px solid #e1e5e9',
+              marginTop: '16px'
+            }}>
+              <Button secondary onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button
+                primary
+                onClick={handleUpload}
+                disabled={pendingCount === 0}
+              >
+                Upload {pendingCount > 0 ? `${pendingCount} folders` : ''}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

@@ -1,15 +1,11 @@
 import { useState, useRef } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { DHIS2Button } from "@/components/ui/dhis2-components";
-import { Progress } from "@/components/ui/progress";
-import { Upload, X, File, CheckCircle2, AlertCircle } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Modal, Button, Input } from "@dhis2/ui";
+import { 
+  IconUpload24, 
+  IconFileDocument24, 
+  IconCheckmark24, 
+  IconWarning24
+} from "@dhis2/ui-icons";
 
 interface FileUploadItem {
   id: string;
@@ -112,8 +108,7 @@ export function FileUploadDialog({
   };
 
   const getFileIcon = (fileName: string) => {
-    const extension = fileName.split('.').pop()?.toLowerCase();
-    return <File className="w-4 h-4 text-muted-foreground" />;
+    return <IconFileDocument24 />;
   };
 
   const formatFileSize = (bytes: number) => {
@@ -129,130 +124,222 @@ export function FileUploadDialog({
   const totalCount = uploadFiles.length;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5 text-drive-blue" />
-            Upload files
-          </DialogTitle>
-          <DialogDescription>
-            {currentFolderName 
-              ? `Upload files to "${currentFolderName}" folder`
-              : "Upload files to My Drive"
-            }
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 space-y-4">
-          {/* Drop Zone */}
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              isDragOver 
-                ? 'border-drive-blue bg-drive-blue/5' 
-                : 'border-muted-foreground/25 hover:border-drive-blue/50'
-            }`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">
-              {isDragOver ? 'Drop files here' : 'Drag files here or click to browse'}
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              You can upload multiple files at once
-            </p>
-            <DHIS2Button
-              secondary
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Browse files
-            </DHIS2Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileSelect(e.target.files)}
-            />
-          </div>
-
-          {/* File List */}
-          {uploadFiles.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium">
-                  Files to upload ({totalCount})
-                </h4>
-                {completedCount > 0 && (
-                  <span className="text-sm text-muted-foreground">
-                    {completedCount} of {totalCount} completed
-                  </span>
-                )}
+    <>
+      {open && (
+        <Modal
+          onClose={() => onOpenChange(false)}
+        >
+                     <div style={{ padding: '24px', maxWidth: '600px', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
+            {/* Header */}
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                marginBottom: '8px',
+                fontSize: '18px',
+                fontWeight: '600'
+              }}>
+                <IconUpload24 />
+                Upload files
               </div>
-              
-              <ScrollArea className="max-h-60">
-                <div className="space-y-2">
-                  {uploadFiles.map((fileItem) => (
-                    <div
-                      key={fileItem.id}
-                      className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg"
-                    >
-                      {getFileIcon(fileItem.file.name)}
-                      
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {fileItem.file.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatFileSize(fileItem.file.size)}
-                        </p>
-                        
-                        {fileItem.status === 'uploading' && (
-                          <Progress value={fileItem.progress} className="h-1 mt-1" />
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {fileItem.status === 'completed' && (
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
-                        )}
-                        {fileItem.status === 'error' && (
-                          <AlertCircle className="w-4 h-4 text-red-600" />
-                        )}
-                        {fileItem.status === 'pending' && (
-                          <DHIS2Button
-                            secondary
-                            small
-                            className="h-8 w-8 p-0"
-                            onClick={() => removeFile(fileItem.id)}
-                          >
-                            <X className="w-4 h-4" />
-                          </DHIS2Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+              <div style={{ 
+                color: '#666', 
+                fontSize: '14px'
+              }}>
+                {currentFolderName 
+                  ? `Upload files to "${currentFolderName}" folder`
+                  : "Upload files to My Drive"
+                }
+              </div>
             </div>
-          )}
-        </div>
 
-        <div className="flex justify-between pt-4 border-t">
-          <DHIS2Button secondary onClick={handleClose}>
-            Cancel
-          </DHIS2Button>
-          <DHIS2Button
-            primary
-            onClick={handleUpload}
-            disabled={pendingCount === 0}
-          >
-            Upload {pendingCount > 0 ? `${pendingCount} files` : ''}
-          </DHIS2Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                             {/* Drop Zone */}
+               <div
+                 style={{
+                   border: `2px dashed ${isDragOver ? '#2196f3' : '#e1e5e9'}`,
+                   borderRadius: '8px',
+                   padding: '24px',
+                   textAlign: 'center',
+                   backgroundColor: isDragOver ? '#e3f2fd' : 'transparent',
+                   transition: 'all 0.2s ease'
+                 }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                                 <div style={{ 
+                   width: '40px', 
+                   height: '40px', 
+                   color: '#666',
+                   margin: '0 auto 12px auto',
+                   display: 'flex',
+                   justifyContent: 'center',
+                   alignItems: 'center'
+                 }}>
+                   <IconUpload24 />
+                 </div>
+                                 <h3 style={{ 
+                   fontSize: '16px', 
+                   fontWeight: '500', 
+                   marginBottom: '6px',
+                   color: '#333'
+                 }}>
+                   {isDragOver ? 'Drop files here' : 'Drag files here or click to browse'}
+                 </h3>
+                 <p style={{ 
+                   color: '#666', 
+                   marginBottom: '12px',
+                   fontSize: '14px'
+                 }}>
+                   You can upload multiple files at once
+                 </p>
+                <Button
+                  secondary
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Browse files
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                />
+              </div>
+
+              {/* File List */}
+              {uploadFiles.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between'
+                  }}>
+                    <h4 style={{ fontWeight: '500', fontSize: '16px' }}>
+                      Files to upload ({totalCount})
+                    </h4>
+                    {completedCount > 0 && (
+                      <span style={{ 
+                        fontSize: '14px', 
+                        color: '#666'
+                      }}>
+                        {completedCount} of {totalCount} completed
+                      </span>
+                    )}
+                  </div>
+                  
+                                     <div style={{ 
+                     maxHeight: '200px', 
+                     overflowY: 'auto',
+                     border: '1px solid #e1e5e9',
+                     borderRadius: '8px',
+                     padding: '8px'
+                   }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {uploadFiles.map((fileItem) => (
+                        <div
+                          key={fileItem.id}
+                                                     style={{
+                             display: 'flex',
+                             alignItems: 'center',
+                             gap: '12px',
+                             padding: '8px',
+                             backgroundColor: '#f8f9fa',
+                             borderRadius: '6px'
+                           }}
+                        >
+                          {getFileIcon(fileItem.file.name)}
+                          
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ 
+                              fontSize: '14px', 
+                              fontWeight: '500',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {fileItem.file.name}
+                            </p>
+                            <p style={{ 
+                              fontSize: '12px', 
+                              color: '#666'
+                            }}>
+                              {formatFileSize(fileItem.file.size)}
+                            </p>
+                            
+                            {fileItem.status === 'uploading' && (
+                              <div style={{ 
+                                height: '4px', 
+                                backgroundColor: '#e1e5e9', 
+                                borderRadius: '2px', 
+                                marginTop: '4px',
+                                overflow: 'hidden'
+                              }}>
+                                <div style={{ 
+                                  width: `${fileItem.progress}%`, 
+                                  height: '100%', 
+                                  backgroundColor: '#2196f3', 
+                                  borderRadius: '2px',
+                                  transition: 'width 0.3s ease'
+                                }} />
+                              </div>
+                            )}
+                          </div>
+
+                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                             {fileItem.status === 'completed' && (
+                               <div style={{ color: '#4caf50' }}>
+                                 <IconCheckmark24 />
+                               </div>
+                             )}
+                             {fileItem.status === 'error' && (
+                               <div style={{ color: '#f44336' }}>
+                                 <IconWarning24 />
+                               </div>
+                             )}
+                             {fileItem.status === 'pending' && (
+                               <Button
+                                 secondary
+                                 onClick={() => removeFile(fileItem.id)}
+                                 style={{ padding: '4px', minWidth: '32px', height: '32px' }}
+                               >
+                                 ×
+                               </Button>
+                             )}
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              paddingTop: '16px',
+              borderTop: '1px solid #e1e5e9',
+              marginTop: '16px'
+            }}>
+              <Button secondary onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button
+                primary
+                onClick={handleUpload}
+                disabled={pendingCount === 0}
+              >
+                Upload {pendingCount > 0 ? `${pendingCount} files` : ''}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
