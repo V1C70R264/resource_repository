@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
 import { DHIS2Card } from "@/components/ui/dhis2-components";
-import { Header } from "./Header";
+// import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { Breadcrumb } from "./Breadcrumb";
 import { FileGrid } from "./FileGrid";
@@ -593,8 +593,8 @@ export function ResourceRepository() {
 
   return (
     <div className="h-screen bg-gradient-to-br from-background to-muted/20 flex flex-col">
-              <Header />
-        
+              {/* <Header />
+         */}
                  {/* Enhanced Search Bar */}
          <div className="px-6 py-3 border-b bg-muted/30">
            <AdvancedSearch

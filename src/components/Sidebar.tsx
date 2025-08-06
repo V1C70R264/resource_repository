@@ -1,17 +1,21 @@
 import { useState } from "react";
 import { 
-  Plus, 
-  HardDrive, 
-  Users, 
-  Clock, 
-  Star, 
-  Trash2, 
-  FolderPlus, 
-  Upload,
-  ChevronDown,
-  ChevronRight
-} from "lucide-react";
-import { DHIS2Button, DHIS2DropdownButton, DHIS2MenuItem } from "@/components/ui/dhis2-components";
+  Button, 
+  DropdownButton, 
+  MenuItem, 
+  Card,
+  Chip
+} from "@dhis2/ui";
+import { 
+  IconAdd24, 
+  IconFolder24, 
+  IconUpload24,
+  IconFileDocument24,
+  IconShare24,
+  IconClock24,
+  IconStar24,
+  IconArchive24
+} from "@dhis2/ui-icons";
 
 interface SidebarProps {
   activeSection: string;
@@ -25,118 +29,135 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
   const [isExpanded, setIsExpanded] = useState(true);
 
   const navigationItems = [
-    { id: 'my-drive', label: 'My Drive', icon: HardDrive, count: 156 },
-    { id: 'shared', label: 'Shared Items', icon: Users, count: 23 },
-    { id: 'recent', label: 'Recent', icon: Clock, count: 45 },
-    { id: 'starred', label: 'Starred', icon: Star, count: 12 },
-    { id: 'trash', label: 'Trash', icon: Trash2, count: 8 },
+    { id: 'my-drive', label: 'My Drive', icon: IconFileDocument24, count: 156 },
+    { id: 'shared', label: 'Shared Items', icon: IconShare24, count: 23 },
+    { id: 'recent', label: 'Recent', icon: IconClock24, count: 45 },
+    { id: 'starred', label: 'Starred', icon: IconStar24, count: 12 },
+    { id: 'trash', label: 'Trash', icon: IconArchive24, count: 8 },
   ];
 
   return (
-    <aside className="w-64 bg-background border-r border-border h-full flex flex-col">
+    <aside style={{ 
+      width: '256px', 
+      backgroundColor: '#f8f9fa', 
+      borderRight: '1px solid #e1e5e9', 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column' 
+    }}>
       {/* New Button */}
-      <div className="p-4 border-b border-border">
-        <DHIS2DropdownButton
+      <div style={{ padding: '16px', borderBottom: '1px solid #e1e5e9' }}>
+        <DropdownButton
           component={
             <>
-              <DHIS2MenuItem 
+              <MenuItem 
                 label="New folder" 
                 onClick={onNewFolderClick}
+                icon={<IconAdd24 />}
               />
-              <DHIS2MenuItem 
+              <MenuItem 
                 label="File upload" 
                 onClick={onFileUploadClick}
+                icon={<IconUpload24 />}
               />
-              <DHIS2MenuItem 
+              <MenuItem 
                 label="Folder upload" 
                 onClick={onFolderUploadClick}
+                icon={<IconFolder24 />}
               />
             </>
           }
           primary
-          
-          className="w-full justify-start gap-2 h-12 shadow-md"
-          // icon={<Plus className="w-5 h-5" />}
+          icon={<IconAdd24 />}
         >
           New
-        </DHIS2DropdownButton>
+        </DropdownButton>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-2">
-        <ul className="space-y-1">
+      <nav style={{ flex: 1, padding: '8px' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
             
             return (
-              <li key={item.id}>
-                <DHIS2Button
+              <li key={item.id} style={{ marginBottom: '4px' }}>
+                <Button
                   {...(isActive ? { primary: true } : { secondary: true })}
-                  className={`w-full justify-start gap-3 h-10 px-3 ${
-                    isActive ? 'bg-drive-blue-light border-drive-blue/20' : 'hover:bg-muted/50'
-                  }`}
                   onClick={() => onSectionChange(item.id)}
+                  style={{
+                    width: '100%',
+                    justifyContent: 'flex-start',
+                    gap: '12px',
+                    height: '40px',
+                    padding: '0 12px',
+                    backgroundColor: isActive ? '#e3f2fd' : 'transparent',
+                    borderColor: isActive ? '#2196f3' : 'transparent'
+                  }}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span className="flex-1 text-left">{item.label}</span>
+                  <Icon />
+                  <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
                   {item.count > 0 && (
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                    <Chip>
                       {item.count}
-                    </span>
+                    </Chip>
                   )}
-                </DHIS2Button>
+                </Button>
               </li>
             );
           })}
         </ul>
 
-        {/* Storage Usage
-        <div className="mt-8 p-3 bg-muted/30 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Storage</span>
+        {/* Storage Usage Section - Commented out as per original */}
+        {/* 
+        <Card style={{ marginTop: '32px', padding: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>Storage</span>
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0"
               onClick={() => setIsExpanded(!isExpanded)}
             >
               {isExpanded ? (
-                <ChevronDown className="w-3 h-3" />
+                <ChevronDown style={{ width: '12px', height: '12px' }} />
               ) : (
-                <ChevronRight className="w-3 h-3" />
+                <ChevronRight style={{ width: '12px', height: '12px' }} />
               )}
             </Button>
           </div>
           
           {isExpanded && (
             <>
-              <Progress value={68} className="h-2 mb-2" />
-              <div className="text-xs text-muted-foreground">
-                <div className="flex justify-between mb-1">
+              <div style={{ height: '8px', backgroundColor: '#e1e5e9', borderRadius: '4px', marginBottom: '8px' }}>
+                <div style={{ width: '68%', height: '100%', backgroundColor: '#2196f3', borderRadius: '4px' }} />
+              </div>
+              <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span>6.8 GB of 10 GB used</span>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Documents</span>
                     <span>4.2 GB</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Images</span>
                     <span>1.8 GB</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Other</span>
                     <span>0.8 GB</span>
                   </div>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className="w-full mt-2 h-8">
+              <Button secondary style={{ width: '100%', marginTop: '8px', height: '32px' }}>
                 Buy storage
               </Button>
-            </> */}
-          {/* )}
-        </div> */}
+            </>
+          )}
+        </Card>
+        */}
       </nav>
     </aside>
   );
