@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { dataStoreAPI, DHIS2DataStoreAPI } from '@/lib/dhis2-api';
+import { dataStoreAPI, DHIS2DataStoreAPI, DHIS2File, DHIS2Folder } from '@/lib/dhis2-api';
 import { FileItem } from '@/lib/types';
 import { AuditLog, User, Permission } from '@/lib/types';
 
@@ -10,6 +10,7 @@ interface UseDHIS2DataStoreReturn {
   errorFiles: string | null;
   saveFile: (file: FileItem) => Promise<boolean>;
   deleteFile: (fileId: string) => Promise<boolean>;
+  uploadFile: (file: File, folderId?: string) => Promise<FileItem | null>;
   refreshFiles: () => Promise<void>;
 
   // Folders
@@ -17,6 +18,7 @@ interface UseDHIS2DataStoreReturn {
   loadingFolders: boolean;
   errorFolders: string | null;
   saveFolder: (folder: FileItem) => Promise<boolean>;
+  createFolder: (name: string, parentId?: string) => Promise<FileItem | null>;
   deleteFolder: (folderId: string) => Promise<boolean>;
   refreshFolders: () => Promise<void>;
 
@@ -48,10 +50,14 @@ interface UseDHIS2DataStoreReturn {
   saveSettings: (settings: any) => Promise<boolean>;
   refreshSettings: () => Promise<void>;
 
+  // Search
+  searchFiles: (query: string, filters?: any) => Promise<FileItem[]>;
+
   // General
   api: DHIS2DataStoreAPI;
   isLoading: boolean;
   hasError: boolean;
+  initializeData: () => Promise<void>;
 }
 
 export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
@@ -85,13 +91,62 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [errorSettings, setErrorSettings] = useState<string | null>(null);
 
+  // Convert DHIS2File to FileItem
+  const convertDHIS2FileToFileItem = (dhis2File: DHIS2File): FileItem => {
+    return {
+      id: dhis2File.id,
+      name: dhis2File.name,
+      type: dhis2File.type,
+      fileType: dhis2File.fileType,
+      mimeType: dhis2File.mimeType,
+      size: dhis2File.size,
+      sizeFormatted: dhis2File.sizeFormatted,
+      modified: dhis2File.modified,
+      created: dhis2File.created,
+      owner: dhis2File.owner,
+      starred: dhis2File.starred,
+      shared: dhis2File.shared,
+      thumbnail: dhis2File.thumbnail,
+      tags: dhis2File.tags,
+      language: dhis2File.language,
+      documentType: dhis2File.documentType,
+      description: dhis2File.description,
+      version: dhis2File.version,
+      parentId: dhis2File.parentId,
+      path: dhis2File.path,
+    };
+  };
+
+  // Convert DHIS2Folder to FileItem
+  const convertDHIS2FolderToFileItem = (dhis2Folder: DHIS2Folder): FileItem => {
+    return {
+      id: dhis2Folder.id,
+      name: dhis2Folder.name,
+      type: 'folder',
+      fileType: 'folder',
+      mimeType: 'application/x-directory',
+      size: 0,
+      sizeFormatted: '0 B',
+      modified: dhis2Folder.modified,
+      created: dhis2Folder.created,
+      owner: dhis2Folder.owner,
+      starred: false,
+      shared: false,
+      tags: dhis2Folder.tags,
+      parentId: dhis2Folder.parentId,
+      path: dhis2Folder.path,
+      description: dhis2Folder.description,
+    };
+  };
+
   // File operations
   const refreshFiles = useCallback(async () => {
     setLoadingFiles(true);
     setErrorFiles(null);
     try {
       const fetchedFiles = await dataStoreAPI.getAllFiles();
-      setFiles(fetchedFiles);
+      const convertedFiles = fetchedFiles.map(convertDHIS2FileToFileItem);
+      setFiles(convertedFiles);
     } catch (error) {
       setErrorFiles(error instanceof Error ? error.message : 'Failed to load files');
     } finally {
@@ -101,7 +156,30 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
 
   const saveFile = useCallback(async (file: FileItem): Promise<boolean> => {
     try {
-      const success = await dataStoreAPI.saveFile(file);
+      const dhis2File: DHIS2File = {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        fileType: file.fileType,
+        mimeType: file.mimeType,
+        size: file.size,
+        sizeFormatted: file.sizeFormatted,
+        modified: file.modified,
+        created: file.created,
+        owner: file.owner,
+        starred: file.starred,
+        shared: file.shared,
+        thumbnail: file.thumbnail,
+        tags: file.tags,
+        language: file.language,
+        documentType: file.documentType,
+        description: file.description,
+        version: file.version,
+        parentId: file.parentId,
+        path: file.path,
+      };
+      
+      const success = await dataStoreAPI.saveFile(dhis2File);
       if (success) {
         await refreshFiles();
       }
@@ -109,6 +187,18 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     } catch (error) {
       console.error('Error saving file:', error);
       return false;
+    }
+  }, [refreshFiles]);
+
+  const uploadFile = useCallback(async (file: File, folderId?: string): Promise<FileItem | null> => {
+    try {
+      const uploadedFile = await dataStoreAPI.uploadFile(file, folderId);
+      const convertedFile = convertDHIS2FileToFileItem(uploadedFile);
+      await refreshFiles();
+      return convertedFile;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      return null;
     }
   }, [refreshFiles]);
 
@@ -131,7 +221,8 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     setErrorFolders(null);
     try {
       const fetchedFolders = await dataStoreAPI.getAllFolders();
-      setFolders(fetchedFolders);
+      const convertedFolders = fetchedFolders.map(convertDHIS2FolderToFileItem);
+      setFolders(convertedFolders);
     } catch (error) {
       setErrorFolders(error instanceof Error ? error.message : 'Failed to load folders');
     } finally {
@@ -141,7 +232,21 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
 
   const saveFolder = useCallback(async (folder: FileItem): Promise<boolean> => {
     try {
-      const success = await dataStoreAPI.saveFolder(folder);
+      const dhis2Folder: DHIS2Folder = {
+        id: folder.id,
+        name: folder.name,
+        type: 'folder',
+        parentId: folder.parentId,
+        path: folder.path,
+        created: folder.created,
+        modified: folder.modified,
+        owner: folder.owner,
+        description: folder.description,
+        tags: folder.tags,
+        permissions: [],
+      };
+      
+      const success = await dataStoreAPI.saveFolder(dhis2Folder);
       if (success) {
         await refreshFolders();
       }
@@ -149,6 +254,18 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     } catch (error) {
       console.error('Error saving folder:', error);
       return false;
+    }
+  }, [refreshFolders]);
+
+  const createFolder = useCallback(async (name: string, parentId?: string): Promise<FileItem | null> => {
+    try {
+      const createdFolder = await dataStoreAPI.createFolder(name, parentId);
+      const convertedFolder = convertDHIS2FolderToFileItem(createdFolder);
+      await refreshFolders();
+      return convertedFolder;
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      return null;
     }
   }, [refreshFolders]);
 
@@ -273,15 +390,41 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     }
   }, [refreshSettings]);
 
+  // Search operations
+  const searchFiles = useCallback(async (query: string, filters?: any): Promise<FileItem[]> => {
+    try {
+      const searchResults = await dataStoreAPI.searchFiles(query, filters);
+      return searchResults.map(convertDHIS2FileToFileItem);
+    } catch (error) {
+      console.error('Error searching files:', error);
+      return [];
+    }
+  }, []);
+
+  // Initialize data
+  const initializeData = useCallback(async () => {
+    try {
+      // Initialize sample data if needed
+      await dataStoreAPI.initializeSampleData();
+      
+      // Load all data
+      await Promise.all([
+        refreshFiles(),
+        refreshFolders(),
+        refreshUsers(),
+        refreshAuditLogs(),
+        refreshPermissions(),
+        refreshSettings(),
+      ]);
+    } catch (error) {
+      console.error('Error initializing data:', error);
+    }
+  }, [refreshFiles, refreshFolders, refreshUsers, refreshAuditLogs, refreshPermissions, refreshSettings]);
+
   // Load initial data
   useEffect(() => {
-    refreshFiles();
-    refreshFolders();
-    refreshUsers();
-    refreshAuditLogs();
-    refreshPermissions();
-    refreshSettings();
-  }, [refreshFiles, refreshFolders, refreshUsers, refreshAuditLogs, refreshPermissions, refreshSettings]);
+    initializeData();
+  }, [initializeData]);
 
   // Computed values
   const isLoading = loadingFiles || loadingFolders || loadingUsers || loadingAuditLogs || loadingPermissions || loadingSettings;
@@ -294,6 +437,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     errorFiles,
     saveFile,
     deleteFile,
+    uploadFile,
     refreshFiles,
 
     // Folders
@@ -301,6 +445,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     loadingFolders,
     errorFolders,
     saveFolder,
+    createFolder,
     deleteFolder,
     refreshFolders,
 
@@ -332,9 +477,13 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     saveSettings,
     refreshSettings,
 
+    // Search
+    searchFiles,
+
     // General
     api: dataStoreAPI,
     isLoading,
     hasError,
+    initializeData,
   };
 }; 

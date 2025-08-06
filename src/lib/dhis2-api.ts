@@ -29,10 +29,50 @@ export interface DHIS2DataStoreNamespace {
   lastUpdated: string;
 }
 
+// Resource Repository specific interfaces
+export interface DHIS2File {
+  id: string;
+  name: string;
+  type: 'file' | 'folder';
+  fileType?: string;
+  mimeType?: string;
+  size?: number;
+  sizeFormatted?: string;
+  modified: string;
+  created: string;
+  owner: string;
+  starred: boolean;
+  shared: boolean;
+  thumbnail?: string;
+  tags: string[];
+  language?: string;
+  documentType?: string;
+  description?: string;
+  version?: string;
+  parentId?: string;
+  path: string;
+  content?: string; // Base64 encoded content for small files
+  url?: string; // URL for larger files
+}
+
+export interface DHIS2Folder {
+  id: string;
+  name: string;
+  type: 'folder';
+  parentId?: string;
+  path: string;
+  created: string;
+  modified: string;
+  owner: string;
+  description?: string;
+  tags: string[];
+  permissions: string[];
+}
+
 // API Configuration
-const DHIS2_BASE_URL = import.meta.env.VITE_DHIS2_URL;
-const DHIS2_USERNAME = import.meta.env.VITE_DHIS2_USERNAME;
-const DHIS2_PASSWORD = import.meta.env.VITE_DHIS2_PASSWORD;
+const DHIS2_BASE_URL = import.meta.env.VITE_DHIS2_URL || 'https://your-dhis2-instance.com';
+const DHIS2_USERNAME = import.meta.env.VITE_DHIS2_USERNAME || 'admin';
+const DHIS2_PASSWORD = import.meta.env.VITE_DHIS2_PASSWORD || 'district';
 
 // Authentication helper
 const getAuthHeaders = () => {
@@ -46,19 +86,58 @@ const getAuthHeaders = () => {
 // Generic API request helper
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${DHIS2_BASE_URL}/api${endpoint}`;
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...getAuthHeaders(),
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`DHIS2 API Error: ${response.status} ${response.statusText}`);
+    }
+
+    // Handle empty responses
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`API Request failed for ${endpoint}:`, error);
+    throw error;
+  }
+};
+
+// File upload helper
+const uploadFile = async (file: File, folderId?: string): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (folderId) {
+    formData.append('folderId', folderId);
+  }
+
+  const url = `${DHIS2_BASE_URL}/api/files`;
+  const credentials = btoa(`${DHIS2_USERNAME}:${DHIS2_PASSWORD}`);
+  
   const response = await fetch(url, {
-    ...options,
+    method: 'POST',
     headers: {
-      ...getAuthHeaders(),
-      ...options.headers,
+      'Authorization': `Basic ${credentials}`,
     },
+    body: formData,
   });
 
   if (!response.ok) {
-    throw new Error(`DHIS2 API Error: ${response.status} ${response.statusText}`);
+    throw new Error(`File upload failed: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  const result = await response.json();
+  return result.id;
 };
 
 // Data Store API Class
@@ -74,7 +153,7 @@ export class DHIS2DataStoreAPI {
   async getNamespaceKeys(): Promise<string[]> {
     try {
       const response = await apiRequest(`/dataStore/${this.namespace}`);
-      return response;
+      return response || [];
     } catch (error) {
       console.error('Error fetching namespace keys:', error);
       return [];
@@ -141,7 +220,7 @@ export class DHIS2DataStoreAPI {
   static async getAllNamespaces(): Promise<DHIS2DataStoreNamespace[]> {
     try {
       const response = await apiRequest('/dataStore');
-      return response;
+      return response || [];
     } catch (error) {
       console.error('Error fetching namespaces:', error);
       return [];
@@ -149,12 +228,14 @@ export class DHIS2DataStoreAPI {
   }
 
   // Resource Repository Specific Methods
-  async saveFile(file: any): Promise<boolean> {
+
+  // File Management
+  async saveFile(file: DHIS2File): Promise<boolean> {
     const key = `file_${file.id}`;
     return this.setKeyValue(key, file);
   }
 
-  async getFile(fileId: string): Promise<any> {
+  async getFile(fileId: string): Promise<DHIS2File | null> {
     const key = `file_${fileId}`;
     return this.getKeyValue(key);
   }
@@ -164,9 +245,9 @@ export class DHIS2DataStoreAPI {
     return this.deleteKey(key);
   }
 
-  async getAllFiles(): Promise<any[]> {
+  async getAllFiles(): Promise<DHIS2File[]> {
     const keys = await this.getNamespaceKeys();
-    const files = [];
+    const files: DHIS2File[] = [];
     
     for (const key of keys) {
       if (key.startsWith('file_')) {
@@ -180,12 +261,47 @@ export class DHIS2DataStoreAPI {
     return files;
   }
 
-  async saveFolder(folder: any): Promise<boolean> {
+  async uploadFile(file: File, folderId?: string): Promise<DHIS2File> {
+    try {
+      // Upload file to DHIS2 file store
+      const fileId = await uploadFile(file, folderId);
+      
+      // Create file metadata
+      const fileMetadata: DHIS2File = {
+        id: fileId,
+        name: file.name,
+        type: 'file',
+        fileType: this.getFileType(file.name),
+        mimeType: file.type,
+        size: file.size,
+        sizeFormatted: this.formatFileSize(file.size),
+        modified: new Date().toISOString(),
+        created: new Date().toISOString(),
+        owner: DHIS2_USERNAME,
+        starred: false,
+        shared: false,
+        tags: [],
+        parentId: folderId,
+        path: folderId ? `/${folderId}/${file.name}` : `/${file.name}`,
+      };
+
+      // Save metadata to data store
+      await this.saveFile(fileMetadata);
+      
+      return fileMetadata;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
+  }
+
+  // Folder Management
+  async saveFolder(folder: DHIS2Folder): Promise<boolean> {
     const key = `folder_${folder.id}`;
     return this.setKeyValue(key, folder);
   }
 
-  async getFolder(folderId: string): Promise<any> {
+  async getFolder(folderId: string): Promise<DHIS2Folder | null> {
     const key = `folder_${folderId}`;
     return this.getKeyValue(key);
   }
@@ -195,9 +311,9 @@ export class DHIS2DataStoreAPI {
     return this.deleteKey(key);
   }
 
-  async getAllFolders(): Promise<any[]> {
+  async getAllFolders(): Promise<DHIS2Folder[]> {
     const keys = await this.getNamespaceKeys();
-    const folders = [];
+    const folders: DHIS2Folder[] = [];
     
     for (const key of keys) {
       if (key.startsWith('folder_')) {
@@ -211,6 +327,28 @@ export class DHIS2DataStoreAPI {
     return folders;
   }
 
+  async createFolder(name: string, parentId?: string): Promise<DHIS2Folder> {
+    const folderId = `folder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const folder: DHIS2Folder = {
+      id: folderId,
+      name,
+      type: 'folder',
+      parentId,
+      path: parentId ? `/${parentId}/${name}` : `/${name}`,
+      created: new Date().toISOString(),
+      modified: new Date().toISOString(),
+      owner: DHIS2_USERNAME,
+      description: '',
+      tags: [],
+      permissions: [],
+    };
+
+    await this.saveFolder(folder);
+    return folder;
+  }
+
+  // User Management
   async saveUser(user: any): Promise<boolean> {
     const key = `user_${user.id}`;
     return this.setKeyValue(key, user);
@@ -237,6 +375,7 @@ export class DHIS2DataStoreAPI {
     return users;
   }
 
+  // Audit Logging
   async saveAuditLog(log: any): Promise<boolean> {
     const key = `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     return this.setKeyValue(key, log);
@@ -261,6 +400,7 @@ export class DHIS2DataStoreAPI {
       .slice(0, limit);
   }
 
+  // Permissions Management
   async savePermissions(permissions: any[]): Promise<boolean> {
     return this.setKeyValue('permissions', permissions);
   }
@@ -270,6 +410,7 @@ export class DHIS2DataStoreAPI {
     return permissions || [];
   }
 
+  // Settings Management
   async saveSettings(settings: any): Promise<boolean> {
     return this.setKeyValue('settings', settings);
   }
@@ -277,6 +418,123 @@ export class DHIS2DataStoreAPI {
   async getSettings(): Promise<any> {
     const settings = await this.getKeyValue('settings');
     return settings || {};
+  }
+
+  // Search and Filter
+  async searchFiles(query: string, filters?: any): Promise<DHIS2File[]> {
+    const files = await this.getAllFiles();
+    
+    return files.filter(file => {
+      const matchesQuery = file.name.toLowerCase().includes(query.toLowerCase()) ||
+                          file.tags?.some(tag => tag.toLowerCase().includes(query.toLowerCase())) ||
+                          file.description?.toLowerCase().includes(query.toLowerCase());
+      
+      if (!matchesQuery) return false;
+      
+      if (filters) {
+        if (filters.fileTypes?.length && !filters.fileTypes.includes(file.fileType)) return false;
+        if (filters.tags?.length && !filters.tags.some(tag => file.tags?.includes(tag))) return false;
+        if (filters.starred && !file.starred) return false;
+        if (filters.shared && !file.shared) return false;
+      }
+      
+      return true;
+    });
+  }
+
+  // Utility Methods
+  private getFileType(fileName: string): string {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    const typeMap: { [key: string]: string } = {
+      'pdf': 'document',
+      'doc': 'document',
+      'docx': 'document',
+      'xls': 'spreadsheet',
+      'xlsx': 'spreadsheet',
+      'ppt': 'presentation',
+      'pptx': 'presentation',
+      'jpg': 'image',
+      'jpeg': 'image',
+      'png': 'image',
+      'gif': 'image',
+      'txt': 'text',
+      'csv': 'spreadsheet',
+    };
+    return typeMap[extension || ''] || 'unknown';
+  }
+
+  private formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  // Initialize with sample data for development
+  async initializeSampleData(): Promise<void> {
+    try {
+      const keys = await this.getNamespaceKeys();
+      if (keys.length === 0) {
+        console.log('Initializing sample data...');
+        
+        // Create sample folders
+        const projectFolder = await this.createFolder('Project Documentation');
+        const designFolder = await this.createFolder('Design Assets');
+        
+        // Create sample files (metadata only for demo)
+        const sampleFiles: DHIS2File[] = [
+          {
+            id: 'file_1',
+            name: 'Annual Report 2024.pdf',
+            type: 'file',
+            fileType: 'document',
+            mimeType: 'application/pdf',
+            size: 2516582,
+            sizeFormatted: '2.4 MB',
+            modified: '2024-10-23T10:30:00Z',
+            created: '2024-10-18T14:20:00Z',
+            owner: 'admin',
+            starred: false,
+            shared: true,
+            tags: ['report', 'finance', 'annual'],
+            language: 'en',
+            documentType: 'Report',
+            description: 'Annual financial report for 2024',
+            version: '1.0',
+            path: '/Annual Report 2024.pdf'
+          },
+          {
+            id: 'file_2',
+            name: 'User Manual.docx',
+            type: 'file',
+            fileType: 'document',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            size: 1048576,
+            sizeFormatted: '1.0 MB',
+            modified: '2024-10-22T16:45:00Z',
+            created: '2024-10-15T09:15:00Z',
+            owner: 'admin',
+            starred: true,
+            shared: false,
+            tags: ['manual', 'documentation', 'user'],
+            language: 'en',
+            documentType: 'Manual',
+            description: 'User manual for the application',
+            version: '2.1',
+            path: '/User Manual.docx'
+          }
+        ];
+
+        for (const file of sampleFiles) {
+          await this.saveFile(file);
+        }
+
+        console.log('Sample data initialized successfully');
+      }
+    } catch (error) {
+      console.error('Error initializing sample data:', error);
+    }
   }
 }
 

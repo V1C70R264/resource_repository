@@ -13,6 +13,9 @@ import { AuditLogDialog } from "./AuditLog";
 import { AccessControlDialog } from "./AccessControl";
 import { FilePreview } from "./FilePreview";
 import { MetadataEditor } from "./MetadataEditor";
+import { APIStatus } from "./APIStatus";
+import { DebugPanel } from "./DebugPanel";
+import { TestPanel } from "./TestPanel";
 import { toast } from "sonner";
 import { useDHIS2DataStore } from "@/hooks/useDHIS2DataStore";
 import { 
@@ -237,14 +240,25 @@ export function ResourceRepository() {
     permissions: dhis2Permissions,
     saveFile,
     saveFolder,
+    createFolder,
+    uploadFile,
     saveAuditLog,
     savePermissions,
+    searchFiles: apiSearchFiles,
     isLoading,
-    hasError
+    hasError,
+    initializeData
   } = useDHIS2DataStore();
 
   // Combine files and folders from DHIS2
   const allFiles = [...dhis2Files, ...dhis2Folders];
+
+  // Debug logging
+  console.log('DHIS2 Files:', dhis2Files);
+  console.log('DHIS2 Folders:', dhis2Folders);
+  console.log('All Files:', allFiles);
+  console.log('Current Folder ID:', currentFolderId);
+  console.log('Active Section:', activeSection);
 
   const filteredFiles = allFiles.filter(file => {
     const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -360,27 +374,22 @@ export function ResourceRepository() {
     }
   };
 
-  const handleCreateFolder = (name: string) => {
-    const newFolder: FileItem = {
-      id: `folder_${Date.now()}`,
-      name,
-      type: 'folder',
-      modified: new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      }),
-      owner: 'You',
-      starred: false,
-      shared: false,
-      tags: ['folder'],
-      parentId: currentFolderId || undefined,
-      created: new Date().toISOString(),
-      path: ""
-    };
-    
-    saveFolder(newFolder);
-    toast(`Created folder: ${name}`);
+  const handleCreateFolder = async (name: string) => {
+    try {
+      console.log('Creating folder:', name, 'in parent:', currentFolderId);
+      const newFolder = await createFolder(name, currentFolderId || undefined);
+      console.log('Created folder result:', newFolder);
+      if (newFolder) {
+        toast.success(`Folder "${name}" created successfully`);
+        // Force refresh the data
+        await initializeData();
+      } else {
+        toast.error('Failed to create folder');
+      }
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      toast.error('Failed to create folder');
+    }
   };
 
   const handleNewFolderClick = () => {
@@ -396,35 +405,20 @@ export function ResourceRepository() {
   };
 
   const handleFileUploadComplete = async (uploadedFiles: File[], folderId?: string) => {
-    const newFiles: FileItem[] = uploadedFiles.map(file => {
-      const fileType = getFileType(file.name);
-      return {
-        id: `file_${Date.now()}_${Math.random()}`,
-        name: file.name,
-        type: 'file',
-        fileType,
-        size: file.size,
-        sizeFormatted: formatFileSize(file.size),
-        modified: new Date().toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'short', 
-          day: 'numeric' 
-        }),
-        owner: 'You',
-        starred: false,
-        shared: false,
-        tags: [fileType],
-        parentId: folderId || undefined,
-        created: new Date().toISOString(),
-        path: ""
-      };
-    });
-    
-    // Save files to DHIS2 Data Store
-    for (const file of newFiles) {
-      await saveFile(file);
+    try {
+      const uploadPromises = uploadedFiles.map(file => uploadFile(file, folderId));
+      const results = await Promise.all(uploadPromises);
+      const successfulUploads = results.filter(result => result !== null);
+      
+      if (successfulUploads.length === uploadedFiles.length) {
+        toast.success(`Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
+      } else {
+        toast.warning(`Uploaded ${successfulUploads.length} of ${uploadedFiles.length} files`);
+      }
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      toast.error('Failed to upload files');
     }
-    toast(`Uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
   };
 
   const handleFolderUploadComplete = async (uploadedFolders: { name: string; files: File[] }[], folderId?: string) => {
@@ -538,8 +532,20 @@ export function ResourceRepository() {
   };
 
   // Enhanced feature handlers
-  const handleSearchFiltersChange = (filters: SearchFilters) => {
+  const handleSearchFiltersChange = async (filters: SearchFilters) => {
     setSearchFilters(filters);
+    
+    // Use API search if query is provided
+    if (filters.query.trim()) {
+      try {
+        const searchResults = await apiSearchFiles(filters.query, filters);
+        // Update the filtered files with search results
+        // Note: This is a simplified approach - in a real app you might want to merge with local filtering
+        console.log('Search results:', searchResults);
+      } catch (error) {
+        console.error('Search error:', error);
+      }
+    }
   };
 
   const handleMetadataSave = (metadata: FileMetadata) => {
@@ -745,6 +751,30 @@ export function ResourceRepository() {
         logs={dhis2AuditLogs}
         isOpen={showAuditLog}
         onClose={() => setShowAuditLog(false)}
+      />
+
+      {/* API Status Indicator */}
+      <APIStatus onStatusChange={(isConnected) => {
+        if (!isConnected) {
+          console.warn('DHIS2 API connection failed');
+        }
+      }} />
+      
+      {/* Debug Panel - Remove this in production */}
+      <DebugPanel
+        dhis2Files={dhis2Files}
+        dhis2Folders={dhis2Folders}
+        allFiles={allFiles}
+        filteredFiles={filteredFiles}
+        currentFolderId={currentFolderId}
+        activeSection={activeSection}
+        onRefresh={initializeData}
+      />
+      
+      {/* Test Panel - Remove this in production */}
+      <TestPanel
+        onCreateFolder={handleCreateFolder}
+        onRefresh={initializeData}
       />
     </div>
   );
