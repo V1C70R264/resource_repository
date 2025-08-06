@@ -1,23 +1,14 @@
-import { useState } from "react";
-import { Search, Filter, X, Calendar, Tag, User, Star, Share2, Grid3X3, List } from "lucide-react";
-import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useState, useEffect, useRef } from "react";
+import { Button, Input, Checkbox, Chip } from "@dhis2/ui";
+import { 
+  IconSearch24, 
+  IconFilter24,
+  IconStar24,
+  IconShare24,
+  IconList24,
+  IconVisualizationColumn24
+} from "@dhis2/ui-icons";
 
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 import { SearchFilters } from "@/lib/types";
 
 interface AdvancedSearchProps {
@@ -40,6 +31,23 @@ export function AdvancedSearch({
   onViewModeChange,
 }: AdvancedSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const updateFilters = (updates: Partial<SearchFilters>) => {
     onFiltersChange({ ...filters, ...updates });
@@ -68,252 +76,309 @@ export function AdvancedSearch({
     filters.dateRange.end;
 
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
       {/* Search Input */}
-      <div className="relative flex-1 max-w-md min-w-0">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 pointer-events-none z-10" />
-        <div className="relative">
-          <DHIS2Input
+      <div style={{ position: 'relative', flex: 1, maxWidth: '448px', minWidth: 0, display: 'flex', alignItems: 'center' }}>
+        <div style={{ 
+          position: 'absolute', 
+          left: '8px', 
+          color: '#666',
+          pointerEvents: 'none',
+          zIndex: 10
+        }}>
+          {/* <IconSearch24 /> */}
+        </div>
+        <div style={{ position: 'relative', width: '100%' }}>
+          <Input
             type="text"
-            placeholder="Search files, folders, and content..."
+            placeholder="  Search files, folders, and content..."
             value={filters.query}
             onChange={(e) => updateFilters({ query: e.value })}
-            className="pl-10 pr-10 w-full"
           />
           {filters.query && (
             <button
               onClick={() => updateFilters({ query: "" })}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-muted/50 rounded flex items-center justify-center"
+              style={{
+                position: 'absolute',
+                right: '8px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                height: '20px',
+                width: '20px',
+                padding: 0,
+                background: 'none',
+                border: 'none',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#666',
+                fontSize: '16px'
+              }}
               type="button"
             >
-              <X className="w-3 h-3" />
+              ×
             </button>
           )}
         </div>
       </div>
 
       {/* Filter Button */}
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
-        <PopoverTrigger asChild>
-          <DHIS2Button
-            {...(hasActiveFilters ? { primary: true } : { secondary: true })}
-            small
-            className="gap-2"
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-            {hasActiveFilters && (
-              <Badge variant="secondary" className="ml-1">
-                {[
-                  filters.fileTypes.length,
-                  filters.tags.length,
-                  filters.owners.length,
-                  filters.starred ? 1 : 0,
-                  filters.shared ? 1 : 0,
-                  filters.dateRange.start ? 1 : 0,
-                  filters.dateRange.end ? 1 : 0,
-                ].reduce((a, b) => a + b, 0)}
-              </Badge>
-            )}
-          </DHIS2Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80" align="end">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium">Search Filters</h4>
-              {hasActiveFilters && (
-                <DHIS2Button
-                  secondary
-                  small
-                  onClick={clearFilters}
-                >
-                  Clear All
-                </DHIS2Button>
-              )}
-            </div>
-
-            {/* File Types */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">File Types</label>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {availableFileTypes.map((type) => (
-                  <div key={type} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`type-${type}`}
-                      checked={filters.fileTypes.includes(type)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          updateFilters({
-                            fileTypes: [...filters.fileTypes, type],
-                          });
-                        } else {
-                          updateFilters({
-                            fileTypes: filters.fileTypes.filter((t) => t !== type),
-                          });
-                        }
-                      }}
-                    />
-                    <label
-                      htmlFor={`type-${type}`}
-                      className="text-sm cursor-pointer"
-                    >
-                      {type}
-                    </label>
-                  </div>
-                ))}
+      <div ref={dropdownRef} style={{ position: 'relative' }}>
+        <Button
+          {...(hasActiveFilters ? { primary: true } : { secondary: true })}
+          onClick={() => setIsOpen(!isOpen)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <IconFilter24 />
+          Filters
+          {hasActiveFilters && (
+            <Chip>
+              {[
+                filters.fileTypes.length,
+                filters.tags.length,
+                filters.owners.length,
+                filters.starred ? 1 : 0,
+                filters.shared ? 1 : 0,
+                filters.dateRange.start ? 1 : 0,
+                filters.dateRange.end ? 1 : 0,
+              ].reduce((a, b) => a + b, 0)}
+            </Chip>
+          )}
+        </Button>
+        {isOpen && (
+          <div style={{ 
+            position: 'absolute',
+            right: 0,
+            top: '100%',
+            width: '320px',
+            backgroundColor: 'white',
+            border: '1px solid #e1e5e9',
+            borderRadius: '8px',
+            padding: '16px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            zIndex: 1000,
+            marginTop: '4px'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h4 style={{ fontWeight: '500', fontSize: '16px' }}>Search Filters</h4>
+                {hasActiveFilters && (
+                  <Button
+                    secondary
+                    onClick={clearFilters}
+                    style={{ fontSize: '14px', padding: '4px 8px' }}
+                  >
+                    Clear All
+                  </Button>
+                )}
               </div>
-            </div>
 
-            {/* Tags */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Tags</label>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {availableTags.map((tag) => (
-                  <div key={tag} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`tag-${tag}`}
-                      checked={filters.tags.includes(tag)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          updateFilters({
-                            tags: [...filters.tags, tag],
-                          });
-                        } else {
-                          updateFilters({
-                            tags: filters.tags.filter((t) => t !== tag),
-                          });
-                        }
-                      }}
-                    />
-                    <label
-                      htmlFor={`tag-${tag}`}
-                      className="text-sm cursor-pointer"
-                    >
-                      {tag}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Owners */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Owners</label>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {availableOwners.map((owner) => (
-                  <div key={owner} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`owner-${owner}`}
-                      checked={filters.owners.includes(owner)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          updateFilters({
-                            owners: [...filters.owners, owner],
-                          });
-                        } else {
-                          updateFilters({
-                            owners: filters.owners.filter((o) => o !== owner),
-                          });
-                        }
-                      }}
-                    />
-                    <label
-                      htmlFor={`owner-${owner}`}
-                      className="text-sm cursor-pointer"
-                    >
-                      {owner}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Date Range */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Date Range</label>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground">From</label>
-                  <input
-                    type="date"
-                    value={filters.dateRange.start || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        dateRange: { ...filters.dateRange, start: e.target.value },
-                      })
-                    }
-                    className="w-full px-2 py-1 text-sm border rounded"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">To</label>
-                  <input
-                    type="date"
-                    value={filters.dateRange.end || ""}
-                    onChange={(e) =>
-                      updateFilters({
-                        dateRange: { ...filters.dateRange, end: e.target.value },
-                      })
-                    }
-                    className="w-full px-2 py-1 text-sm border rounded"
-                  />
+              {/* File Types */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '500' }}>File Types</label>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '8px', 
+                  maxHeight: '128px', 
+                  overflowY: 'auto' 
+                }}>
+                  {availableFileTypes.map((type) => (
+                    <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Checkbox
+                        checked={filters.fileTypes.includes(type)}
+                        onChange={(e) => {
+                          if (e.checked) {
+                            updateFilters({
+                              fileTypes: [...filters.fileTypes, type],
+                            });
+                          } else {
+                            updateFilters({
+                              fileTypes: filters.fileTypes.filter((t) => t !== type),
+                            });
+                          }
+                        }}
+                      />
+                      <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                        {type}
+                      </label>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
 
-            {/* Quick Filters */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Quick Filters</label>
-              <div className="flex flex-wrap gap-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="starred"
-                    checked={filters.starred}
-                    onCheckedChange={(checked) =>
-                      updateFilters({ starred: checked as boolean })
-                    }
-                  />
-                  <label htmlFor="starred" className="text-sm cursor-pointer">
-                    Starred
-                  </label>
+              {/* Tags */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '500' }}>Tags</label>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '8px', 
+                  maxHeight: '128px', 
+                  overflowY: 'auto' 
+                }}>
+                  {availableTags.map((tag) => (
+                    <div key={tag} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Checkbox
+                        checked={filters.tags.includes(tag)}
+                        onChange={(e) => {
+                          if (e.checked) {
+                            updateFilters({
+                              tags: [...filters.tags, tag],
+                            });
+                          } else {
+                            updateFilters({
+                              tags: filters.tags.filter((t) => t !== tag),
+                            });
+                          }
+                        }}
+                      />
+                      <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                        {tag}
+                      </label>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="shared"
-                    checked={filters.shared}
-                    onCheckedChange={(checked) =>
-                      updateFilters({ shared: checked as boolean })
-                    }
-                  />
-                  <label htmlFor="shared" className="text-sm cursor-pointer">
-                    Shared
-                  </label>
+              </div>
+
+              {/* Owners */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '500' }}>Owners</label>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '8px', 
+                  maxHeight: '128px', 
+                  overflowY: 'auto' 
+                }}>
+                  {availableOwners.map((owner) => (
+                    <div key={owner} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Checkbox
+                        checked={filters.owners.includes(owner)}
+                        onChange={(e) => {
+                          if (e.checked) {
+                            updateFilters({
+                              owners: [...filters.owners, owner],
+                            });
+                          } else {
+                            updateFilters({
+                              owners: filters.owners.filter((o) => o !== owner),
+                            });
+                          }
+                        }}
+                      />
+                      <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                        {owner}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date Range */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '500' }}>Date Range</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>From</label>
+                    <input
+                      type="date"
+                      value={filters.dateRange.start || ""}
+                      onChange={(e) =>
+                        updateFilters({
+                          dateRange: { ...filters.dateRange, start: e.target.value },
+                        })
+                      }
+                      style={{ 
+                        width: '100%', 
+                        padding: '8px', 
+                        fontSize: '14px', 
+                        border: '1px solid #e1e5e9', 
+                        borderRadius: '4px' 
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>To</label>
+                    <input
+                      type="date"
+                      value={filters.dateRange.end || ""}
+                      onChange={(e) =>
+                        updateFilters({
+                          dateRange: { ...filters.dateRange, end: e.target.value },
+                        })
+                      }
+                      style={{ 
+                        width: '100%', 
+                        padding: '8px', 
+                        fontSize: '14px', 
+                        border: '1px solid #e1e5e9', 
+                        borderRadius: '4px' 
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Filters */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '500' }}>Quick Filters</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Checkbox
+                      checked={filters.starred}
+                      onChange={(e) =>
+                        updateFilters({ starred: e.checked })
+                      }
+                    />
+                    <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                      Starred
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Checkbox
+                      checked={filters.shared}
+                      onChange={(e) =>
+                        updateFilters({ shared: e.checked })
+                      }
+                    />
+                    <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                      Shared
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </PopoverContent>
-      </Popover>
+        )}
+      </div>
 
       {/* View Toggle - Only show if onViewModeChange is provided */}
       {onViewModeChange && viewMode && (
-        <div className="flex border border-border rounded-lg p-1 bg-muted/50 ml-2">
-          <DHIS2Button
-            primary={viewMode === 'grid'}
-            small
+        <div style={{ 
+          display: 'flex', 
+          border: '1px solid #e1e5e9', 
+          borderRadius: '8px', 
+          padding: '4px', 
+          backgroundColor: '#f8f9fa',
+          marginLeft: '8px'
+        }}>
+          <Button
+            {...(viewMode === 'grid' ? { primary: true } : { secondary: true })}
             onClick={() => onViewModeChange('grid')}
-            className="h-8 w-8 p-0"
+            style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}
           >
-            <Grid3X3 className="w-4 h-4" />
-          </DHIS2Button>
-          <DHIS2Button
-            primary={viewMode === 'list'}
-            small
+            <IconVisualizationColumn24 />
+          </Button>
+          <Button
+            {...(viewMode === 'list' ? { primary: true } : { secondary: true })}
             onClick={() => onViewModeChange('list')}
-            className="h-8 w-8 p-0"
+            style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}
           >
-            <List className="w-4 h-4" />
-          </DHIS2Button>
+            <IconList24 />
+          </Button>
         </div>
       )}
     </div>
