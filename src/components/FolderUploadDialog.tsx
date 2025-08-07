@@ -5,6 +5,8 @@ import {
   IconCheckmark24,
   IconUpload24
 } from "@dhis2/ui-icons";
+import { toast } from "sonner";
+import { uploadFileToNamespace } from "@/lib/dhis2-api";
 
 interface FolderUploadItem {
   id: string;
@@ -114,10 +116,22 @@ export function FolderUploadDialog({
 
   const handleUpload = async () => {
     const pendingFolders = uploadFolders.filter(f => f.status === 'pending');
-    
-    // Start uploading all pending folders
-    await Promise.all(pendingFolders.map(folderItem => simulateUpload(folderItem)));
-    
+
+    for (const folderItem of pendingFolders) {
+      for (const file of folderItem.files) {
+        // Use file.webkitRelativePath to preserve subfolder structure if needed
+        const key = file.webkitRelativePath ? file.webkitRelativePath.replace(/^[^/]+\//, '') : file.name;
+        console.log(`[DEV] Attempting to upload file: ${key} to folder/namespace: ${folderItem.name}`);
+        const fileForUpload = new File([file], key, { type: file.type });
+        const success = await uploadFileToNamespace(folderItem.name, fileForUpload);
+        if (success) {
+          toast.success(`File "${key}" uploaded successfully`);
+        } else {
+          toast.error(`Failed to upload file "${key}"`);
+        }
+      }
+    }
+
     // Call the completion handler
     const completedFolders = uploadFolders.map(f => ({ name: f.name, files: f.files }));
     onUploadComplete(completedFolders, currentFolderId);

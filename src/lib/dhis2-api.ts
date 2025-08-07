@@ -556,6 +556,34 @@ export class DHIS2DataStoreAPI {
   }
 }
 
+/**
+ * Upload a file to a DHIS2 namespace (folder) as a key-value pair.
+ * @param namespace The namespace (folder) to upload to
+ * @param file The File object to upload
+ * @returns true if successful, false otherwise
+ */
+export async function uploadFileToNamespace(namespace: string, file: File): Promise<boolean> {
+  try {
+    // Read file as base64
+    const fileContent = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    // Use file.name as the key
+    await apiRequest(`/dataStore/${encodeURIComponent(namespace)}/${encodeURIComponent(file.name)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: file.name, content: fileContent }),
+    });
+    return true;
+  } catch (error) {
+    // Optionally log error
+    return false;
+  }
+}
+
 // Export default instance for resource repository
 export const dataStoreAPI = new DHIS2DataStoreAPI('resource-repository');
 

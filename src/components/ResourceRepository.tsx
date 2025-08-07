@@ -377,6 +377,7 @@ export function ResourceRepository() {
 
   const handleCreateFolder = async (name: string) => {
     try {
+      console.log(`[DEV] Attempting to create folder(namespace): ${name}`);
       const api = createDataStoreAPI(name); // Each namespace is a folder
       const success = await api.createNamespace(name);
       if (success) {

@@ -6,6 +6,8 @@ import {
   IconCheckmark24, 
   IconWarning24
 } from "@dhis2/ui-icons";
+import { toast } from "sonner";
+import { uploadFileToNamespace } from "@/lib/dhis2-api";
 
 interface FileUploadItem {
   id: string;
@@ -89,14 +91,21 @@ export function FileUploadDialog({
 
   const handleUpload = async () => {
     const pendingFiles = uploadFiles.filter(f => f.status === 'pending');
-    
-    // Start uploading all pending files
-    await Promise.all(pendingFiles.map(fileItem => simulateUpload(fileItem)));
-    
+
+    await Promise.all(pendingFiles.map(async (fileItem) => {
+      console.log(`[DEV] Attempting to upload file: ${fileItem.file.name} to folder/namespace: ${currentFolderName}`);
+      const success = await uploadFileToNamespace(currentFolderName || 'my-drive', fileItem.file);
+      if (success) {
+        toast.success(`File "${fileItem.file.name}" uploaded successfully`);
+      } else {
+        toast.error(`Failed to upload file "${fileItem.file.name}"`);
+      }
+    }));
+
     // Call the completion handler with the actual files
     const completedFiles = uploadFiles.map(f => f.file);
     onUploadComplete(completedFiles, currentFolderId);
-    
+
     // Clear and close
     setUploadFiles([]);
     onOpenChange(false);
