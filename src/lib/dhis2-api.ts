@@ -228,6 +228,19 @@ export class DHIS2DataStoreAPI {
   }
 
   /**
+   * Fetch all namespaces (folders) from DHIS2 Data Store.
+   * @returns Array of namespace strings
+   */
+  async getAllNamespaces(): Promise<string[]> {
+    try {
+      const response = await apiRequest('/dataStore', { method: 'GET' });
+      return await response.json();
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
    * Creates a new namespace (folder) in the DHIS2 Data Store.
    * @param namespace The name of the namespace (folder) to create
    * @returns true if successful, false otherwise

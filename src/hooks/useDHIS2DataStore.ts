@@ -220,8 +220,22 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     setLoadingFolders(true);
     setErrorFolders(null);
     try {
-      const fetchedFolders = await dataStoreAPI.getAllFolders();
-      const convertedFolders = fetchedFolders.map(convertDHIS2FolderToFileItem);
+      // Fetch all namespaces (folders) from DHIS2
+      const namespaces = await dataStoreAPI.getAllNamespaces();
+      // Convert each namespace to a FileItem representing a folder
+      const convertedFolders = namespaces.map((ns) => ({
+        id: ns,
+        name: ns,
+        type: 'folder' as const,
+        path: `/${ns}`,
+        created: '',
+        modified: '',
+        owner: '',
+        description: '',
+        tags: [],
+        starred: false,
+        shared: false,
+      }));
       setFolders(convertedFolders);
     } catch (error) {
       setErrorFolders(error instanceof Error ? error.message : 'Failed to load folders');
