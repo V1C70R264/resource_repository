@@ -246,7 +246,7 @@ export class DHIS2DataStoreAPI {
   async createNamespace(namespace: string): Promise<boolean> {
     try {
       await apiRequest(`/dataStore/${encodeURIComponent(namespace)}`, {
-        method: 'POST',
+        method: 'PUT',
         body: JSON.stringify({}), // Can be empty or initial data
       });
       return true;
