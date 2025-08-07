@@ -14,8 +14,8 @@ import { AccessControlDialog } from "./AccessControl";
 import { FilePreview } from "./FilePreview";
 import { MetadataEditor } from "./MetadataEditor";
 import { APIStatus } from "./APIStatus";
-import { DebugPanel } from "./DebugPanel";
-import { TestPanel } from "./TestPanel";
+// import { DebugPanel } from "./DebugPanel";
+// import { TestPanel } from "./TestPanel";
 import { toast } from "sonner";
 import { useDHIS2DataStore } from "@/hooks/useDHIS2DataStore";
 import { 
@@ -26,6 +26,7 @@ import {
   SearchFilters, 
   PreviewData 
 } from "@/lib/types";
+import { createDataStoreAPI } from "@/lib/dhis2-api";
 
 export interface FileItem extends FileMetadata {
   parentId?: string;
@@ -376,12 +377,10 @@ export function ResourceRepository() {
 
   const handleCreateFolder = async (name: string) => {
     try {
-      console.log('Creating folder:', name, 'in parent:', currentFolderId);
-      const newFolder = await createFolder(name, currentFolderId || undefined);
-      console.log('Created folder result:', newFolder);
-      if (newFolder) {
+      const api = createDataStoreAPI(name); // Each namespace is a folder
+      const success = await api.createNamespace(name);
+      if (success) {
         toast.success(`Folder "${name}" created successfully`);
-        // Force refresh the data
         await initializeData();
       } else {
         toast.error('Failed to create folder');
@@ -654,7 +653,7 @@ export function ResourceRepository() {
               
               <h2 className="text-2xl font-semibold text-foreground mb-2">
                 {activeSection === 'my-drive' && 'My Drive'}
-                {activeSection === 'shared' && 'Shared with me'}
+                {activeSection === 'shared' && 'Shared Items'}
                 {activeSection === 'recent' && 'Recent'}
                 {activeSection === 'starred' && 'Starred'}
                 {activeSection === 'trash' && 'Trash'}
@@ -761,7 +760,7 @@ export function ResourceRepository() {
       }} />
       
       {/* Debug Panel - Remove this in production */}
-      <DebugPanel
+      {/* <DebugPanel
         dhis2Files={dhis2Files}
         dhis2Folders={dhis2Folders}
         allFiles={allFiles}
@@ -772,10 +771,10 @@ export function ResourceRepository() {
       />
       
       {/* Test Panel - Remove this in production */}
-      <TestPanel
+      {/* <TestPanel
         onCreateFolder={handleCreateFolder}
         onRefresh={initializeData}
-      />
+      /> */} 
     </div>
   );
 }

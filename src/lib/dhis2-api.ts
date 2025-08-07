@@ -227,6 +227,24 @@ export class DHIS2DataStoreAPI {
     }
   }
 
+  /**
+   * Creates a new namespace (folder) in the DHIS2 Data Store.
+   * @param namespace The name of the namespace (folder) to create
+   * @returns true if successful, false otherwise
+   */
+  async createNamespace(namespace: string): Promise<boolean> {
+    try {
+      await apiRequest(`/dataStore/${encodeURIComponent(namespace)}`, {
+        method: 'POST',
+        body: JSON.stringify({}), // Can be empty or initial data
+      });
+      return true;
+    } catch (error) {
+      // Optionally log error
+      return false;
+    }
+  }
+
   // Resource Repository Specific Methods
 
   // File Management
