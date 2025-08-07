@@ -71,8 +71,8 @@ export interface DHIS2Folder {
 
 // API Configuration
 const DHIS2_BASE_URL = import.meta.env.VITE_DHIS2_URL || 'https://upgrade.dhis2.udsm.ac.tz';
-const DHIS2_USERNAME = import.meta.env.VITE_DHIS2_USERNAME || 'your-username';
-const DHIS2_PASSWORD = import.meta.env.VITE_DHIS2_PASSWORD || 'your-password';
+const DHIS2_USERNAME = import.meta.env.VITE_DHIS2_USERNAME || '';
+const DHIS2_PASSWORD = import.meta.env.VITE_DHIS2_PASSWORD || '';
 
 // Authentication helper
 const getAuthHeaders = () => {

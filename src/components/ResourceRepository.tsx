@@ -377,9 +377,10 @@ export function ResourceRepository() {
 
   const handleCreateFolder = async (name: string) => {
     try {
-      console.log(`[DEV] Attempting to create folder(namespace): ${name}`);
+      console.log('[DEBUG] handleCreateFolder called with:', name);
       const api = createDataStoreAPI(name); // Each namespace is a folder
       const success = await api.createNamespace(name);
+      console.log('[DEBUG] createNamespace result:', success);
       if (success) {
         toast.success(`Folder "${name}" created successfully`);
         await initializeData();
@@ -387,7 +388,7 @@ export function ResourceRepository() {
         toast.error('Failed to create folder');
       }
     } catch (error) {
-      console.error('Error creating folder:', error);
+      console.error('[DEBUG] Error in handleCreateFolder:', error);
       toast.error('Failed to create folder');
     }
   };
