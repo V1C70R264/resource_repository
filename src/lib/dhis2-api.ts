@@ -70,9 +70,9 @@ export interface DHIS2Folder {
 }
 
 // API Configuration
-const DHIS2_BASE_URL = import.meta.env.VITE_DHIS2_URL || 'https://your-dhis2-instance.com';
-const DHIS2_USERNAME = import.meta.env.VITE_DHIS2_USERNAME || 'admin';
-const DHIS2_PASSWORD = import.meta.env.VITE_DHIS2_PASSWORD || 'district';
+const DHIS2_BASE_URL = import.meta.env.VITE_DHIS2_URL || 'https://upgrade.dhis2.udsm.ac.tz';
+const DHIS2_USERNAME = import.meta.env.VITE_DHIS2_USERNAME || 'your-username';
+const DHIS2_PASSWORD = import.meta.env.VITE_DHIS2_PASSWORD || 'your-password';
 
 // Authentication helper
 const getAuthHeaders = () => {
@@ -86,26 +86,24 @@ const getAuthHeaders = () => {
 // Generic API request helper
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const url = `${DHIS2_BASE_URL}/api${endpoint}`;
-  
+  const headers = {
+    ...getAuthHeaders(),
+    ...options.headers,
+  };
+  console.log('[API DEBUG] Request:', { url, method: options.method || 'GET', headers });
   try {
     const response = await fetch(url, {
       ...options,
-      headers: {
-        ...getAuthHeaders(),
-        ...options.headers,
-      },
+      headers,
     });
-
     if (!response.ok) {
       throw new Error(`DHIS2 API Error: ${response.status} ${response.statusText}`);
     }
-
     // Handle empty responses
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       return response.json();
     }
-    
     return null;
   } catch (error) {
     console.error(`API Request failed for ${endpoint}:`, error);
