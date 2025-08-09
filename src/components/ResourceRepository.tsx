@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
+import { NoticeBox, Button, CircularLoader } from '@dhis2/ui'
+import { IconUpload24, IconFolder24 } from '@dhis2/ui-icons'
 import { DHIS2Card } from "@/components/ui/dhis2-components";
 // import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
@@ -16,7 +18,7 @@ import { MetadataEditor } from "./MetadataEditor";
 import { APIStatus } from "./APIStatus";
 // import { DebugPanel } from "./DebugPanel";
 // import { TestPanel } from "./TestPanel";
-import { toast } from "sonner";
+import { useDHIS2Alerts } from "./DHIS2Alerts";
 import { useDHIS2DataStore } from "@/hooks/useDHIS2DataStore";
 import { 
   FileMetadata, 
@@ -26,7 +28,7 @@ import {
   SearchFilters, 
   PreviewData 
 } from "@/lib/types";
-import { createDataStoreAPI } from "@/lib/dhis2-api";
+import { createDataStoreAPI, dataStoreAPI } from "@/lib/dhis2-api";
 
 export interface FileItem extends FileMetadata {
   parentId?: string;
@@ -203,6 +205,7 @@ const sampleFiles: FileItem[] = [
 ];
 
 export function ResourceRepository() {
+  const alerts = useDHIS2Alerts();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState('my-drive');
@@ -231,6 +234,17 @@ export function ResourceRepository() {
   const [showAccessControl, setShowAccessControl] = useState(false);
   const [showMetadataEditor, setShowMetadataEditor] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+  const [busyCount, setBusyCount] = useState(0);
+  const startBusy = () => setBusyCount((c) => c + 1);
+  const endBusy = () => setBusyCount((c) => Math.max(0, c - 1));
+  const withBusy = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    startBusy();
+    try {
+      return await fn();
+    } finally {
+      endBusy();
+    }
+  };
 
   // DHIS2 Data Store integration
   const {
@@ -239,6 +253,7 @@ export function ResourceRepository() {
     users: dhis2Users,
     auditLogs: dhis2AuditLogs,
     permissions: dhis2Permissions,
+    settings: dhis2Settings,
     saveFile,
     saveFolder,
     createFolder,
@@ -246,10 +261,27 @@ export function ResourceRepository() {
     saveAuditLog,
     savePermissions,
     searchFiles: apiSearchFiles,
+    refreshFolders,
+    refreshFiles,
+    refreshSettings,
+    refreshPermissions,
     isLoading,
     hasError,
     initializeData
   } = useDHIS2DataStore();
+
+  // Test API connectivity on component mount
+  useEffect(() => {
+    const testAPI = async () => {
+      try {
+        const namespaces = await dataStoreAPI.getAllNamespaces();
+        console.log('[DEBUG] API Test - Available namespaces:', namespaces);
+      } catch (error) {
+        console.error('[DEBUG] API Test failed:', error);
+      }
+    };
+    testAPI();
+  }, []);
 
   // Combine files and folders from DHIS2
   const allFiles = [...dhis2Files, ...dhis2Folders];
@@ -270,17 +302,26 @@ export function ResourceRepository() {
     
     switch (activeSection) {
       case 'shared':
-        return matchesSearch && file.shared && inCurrentFolder;
+        return matchesSearch && file.shared; // show shared items from anywhere
       case 'starred':
-        return matchesSearch && file.starred && inCurrentFolder;
+        return matchesSearch && file.starred; // show starred items from anywhere
       case 'recent':
-        return matchesSearch && inCurrentFolder; // For demo, showing all files as recent
+        return matchesSearch; // show recent from anywhere (demo)
       case 'trash':
         return false; // No files in trash for demo
       default:
         return matchesSearch && inCurrentFolder;
     }
   });
+  
+  // Debug info for UI
+  const debugInfo = {
+    totalFiles: dhis2Files.length,
+    totalFolders: dhis2Folders.length,
+    currentFolder: currentFolderId,
+    activeSection,
+    filteredCount: filteredFiles.length
+  };
 
   const handleItemClick = (item: FileItem) => {
     if (item.type === 'folder') {
@@ -290,11 +331,11 @@ export function ResourceRepository() {
         name: item.name, 
         path: `/${item.name}` 
       }]);
-      toast(`Opened folder: ${item.name}`);
+      alerts.info(`Opened folder: ${item.name}`);
     }
   };
 
-  const handleItemAction = (action: string, item: FileItem) => {
+  const handleItemAction = async (action: string, item: FileItem) => {
     switch (action) {
       case 'preview':
         if (item.type === 'file') {
@@ -325,22 +366,37 @@ export function ResourceRepository() {
         }
         break;
       case 'download':
-        toast(`Downloading: ${item.name}`);
+        alerts.info(`Downloading: ${item.name}`);
         break;
       case 'share':
-        toast(`Sharing: ${item.name}`);
+        alerts.info(`Sharing: ${item.name}`);
         break;
       case 'star':
-        const updatedItem = { ...item, starred: !item.starred };
-        if (item.type === 'file') {
-          saveFile(updatedItem);
-        } else {
-          saveFolder(updatedItem);
-        }
-        toast(`${item.starred ? 'Removed star from' : 'Starred'}: ${item.name}`);
+        await withBusy(async () => {
+          console.log('[DEBUG] Star action - Original item:', item);
+          const updatedItem = { ...item, starred: !item.starred };
+          console.log('[DEBUG] Star action - Updated item:', updatedItem);
+          
+          let ok: boolean;
+          if (item.type === 'file') {
+            console.log('[DEBUG] Star action - Saving file...');
+            ok = await saveFile(updatedItem);
+          } else {
+            console.log('[DEBUG] Star action - Saving folder...');
+            ok = await saveFolder(updatedItem);
+          }
+          
+          console.log('[DEBUG] Star action - Save result:', ok);
+          
+          if (ok) {
+            alerts.success(`${updatedItem.starred ? 'Starred' : 'Removed star from'}: ${item.name}`);
+          } else {
+            alerts.critical(`Failed to ${item.starred ? 'remove star from' : 'star'}: ${item.name}`);
+          }
+        });
         break;
       case 'delete':
-        toast(`Moved to trash: ${item.name}`);
+        alerts.warning(`Moved to trash: ${item.name}`);
         break;
       case 'metadata':
         setSelectedFile(item);
@@ -355,7 +411,7 @@ export function ResourceRepository() {
         setShowAuditLog(true);
         break;
       default:
-        toast(`Action ${action} on: ${item.name}`);
+        alerts.info(`Action ${action} on: ${item.name}`);
     }
   };
 
@@ -371,25 +427,50 @@ export function ResourceRepository() {
         setCurrentFolderId(newBreadcrumbs[clickedIndex].id);
       }
       
-      toast(`Navigated to: ${newBreadcrumbs[clickedIndex].name}`);
+      alerts.info(`Navigated to: ${newBreadcrumbs[clickedIndex].name}`);
     }
   };
 
   const handleCreateFolder = async (name: string) => {
     try {
       console.log('[DEBUG] handleCreateFolder called with:', name);
-      const api = createDataStoreAPI(name); // Each namespace is a folder
-      const success = await api.createNamespace(name);
-      console.log('[DEBUG] createNamespace result:', success);
+      
+      // Show loading state
+      alerts.info(`Creating folder "${name}"...`);
+      
+      // Use the correct method - createFolder instead of createNamespace
+      const success = await withBusy(() => createFolder(name, currentFolderId));
+      console.log('[DEBUG] createFolder result:', success);
+      
       if (success) {
-        toast.success(`Folder "${name}" created successfully`);
-        await initializeData();
+        alerts.success(`Folder "${name}" created successfully`);
+        // No need to call initializeData() - createFolder already refreshes
       } else {
-        toast.error('Failed to create folder');
+        alerts.critical('Failed to create folder');
       }
     } catch (error) {
       console.error('[DEBUG] Error in handleCreateFolder:', error);
-      toast.error('Failed to create folder');
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to create folder';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('already exists')) {
+          errorMessage = error.message;
+        } else if (error.message.includes('Network error')) {
+          errorMessage = 'Network error - please check your connection';
+        } else if (error.message.includes('Authentication error')) {
+          errorMessage = 'Authentication error - please check your credentials';
+        } else if (error.message.includes('Server error')) {
+          errorMessage = 'Server error - please try again later';
+        } else if (error.message.includes('cannot be empty')) {
+          errorMessage = 'Folder name cannot be empty';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+      }
+      
+      alerts.critical(errorMessage);
     }
   };
 
@@ -405,84 +486,40 @@ export function ResourceRepository() {
     setShowFolderUploadDialog(true);
   };
 
-  const handleFileUploadComplete = async (uploadedFiles: File[], folderId?: string) => {
+  const handleGoToMyDrive = () => {
+    setActiveSection('my-drive');
+    setCurrentFolderId(null);
+    setBreadcrumbs([{ id: 'root', name: 'My Drive', path: '/' }]);
+  };
+
+  const handleFileUploadComplete = async (uploadedFiles: any[], folderId?: string) => {
     try {
-      const uploadPromises = uploadedFiles.map(file => uploadFile(file, folderId));
-      const results = await Promise.all(uploadPromises);
-      const successfulUploads = results.filter(result => result !== null);
+      console.log('[DEBUG] handleFileUploadComplete - Received uploaded files:', uploadedFiles);
       
-      if (successfulUploads.length === uploadedFiles.length) {
-        toast.success(`Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
-      } else {
-        toast.warning(`Uploaded ${successfulUploads.length} of ${uploadedFiles.length} files`);
+      // The files are already uploaded via the FileUploadDialog, so we just need to refresh
+      // and show success message
+      await withBusy(() => refreshFiles());
+      
+      if (uploadedFiles.length > 0) {
+        alerts.success(`Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
       }
     } catch (error) {
-      console.error('Error uploading files:', error);
-      toast.error('Failed to upload files');
+      console.error('Error handling file upload completion:', error);
+      alerts.critical('Failed to refresh file list after upload');
     }
   };
 
-  const handleFolderUploadComplete = async (uploadedFolders: { name: string; files: File[] }[], folderId?: string) => {
-    const newItems: FileItem[] = [];
-    
-    uploadedFolders.forEach(folder => {
-      // Create the folder
-      const folderId = `folder_${Date.now()}_${Math.random()}`;
-      const folderItem: FileItem = {
-        id: folderId,
-        name: folder.name,
-        type: 'folder',
-        modified: new Date().toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric'
-        }),
-        owner: 'You',
-        starred: false,
-        shared: false,
-        tags: ['folder'],
-        parentId: currentFolderId || undefined,
-        created: new Date().toISOString(),
-        path: ""
-      };
-      newItems.push(folderItem);
-      
-      // Create files inside the folder
-      folder.files.forEach(file => {
-        const fileType = getFileType(file.name);
-        const fileItem: FileItem = {
-          id: `file_${Date.now()}_${Math.random()}`,
-          name: file.name,
-          type: 'file',
-          fileType,
-          size: file.size,
-          sizeFormatted: formatFileSize(file.size),
-          modified: new Date().toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-          }),
-          owner: 'You',
-          starred: false,
-          shared: false,
-          tags: [fileType],
-          parentId: folderId,
-          created: new Date().toISOString(),
-          path: ""
-        };
-        newItems.push(fileItem);
-      });
-    });
-    
-    // Save folders and files to DHIS2 Data Store
-    for (const item of newItems) {
-      if (item.type === 'file') {
-        await saveFile(item);
-      } else {
-        await saveFolder(item);
-      }
+  const handleFolderUploadComplete = async (result: { createdFolders: any[]; uploadedFiles: any[] }, folderId?: string) => {
+    try {
+      // Refresh data from DHIS2 after folder upload
+      await withBusy(() => Promise.all([refreshFolders(), refreshFiles()]));
+      const folderCount = result.createdFolders?.length || 0;
+      const fileCount = result.uploadedFiles?.length || 0;
+      alerts.success(`Uploaded ${folderCount} folder${folderCount !== 1 ? 's' : ''} with ${fileCount} file${fileCount !== 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error('Error handling folder upload completion:', error);
+      alerts.critical('Failed to refresh after folder upload');
     }
-    toast(`Uploaded ${uploadedFolders.length} folder${uploadedFolders.length > 1 ? 's' : ''}`);
   };
 
   const handleMainAreaDragOver = (e: React.DragEvent) => {
@@ -501,7 +538,9 @@ export function ResourceRepository() {
     
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
-      handleFileUploadComplete(files, currentFolderId);
+      // Open the file upload dialog with the dropped files
+      setShowFileUploadDialog(true);
+      // Note: The FileUploadDialog will handle the actual upload
     }
   };
 
@@ -555,7 +594,7 @@ export function ResourceRepository() {
     } else {
       saveFolder(metadata as any);
     }
-    toast('Metadata updated successfully');
+    alerts.success('Metadata updated successfully');
     setShowMetadataEditor(false);
   };
 
@@ -573,7 +612,7 @@ export function ResourceRepository() {
         break;
     }
     savePermissions(updated);
-    toast(`Permission ${action}ed successfully`);
+    alerts.success(`Permission ${action}ed successfully`);
   };
 
   const handlePreviewClose = () => {
@@ -582,15 +621,15 @@ export function ResourceRepository() {
   };
 
   const handlePreviewDownload = () => {
-    toast('Download started');
+    alerts.info('Download started');
   };
 
   const handlePreviewShare = () => {
-    toast('Share dialog opened');
+    alerts.info('Share dialog opened');
   };
 
   const handlePreviewEdit = () => {
-    toast('Edit mode activated');
+    alerts.info('Edit mode activated');
   };
 
   // Get available data for filters
@@ -640,6 +679,11 @@ export function ResourceRepository() {
             onDragLeave={handleMainAreaDragLeave}
             onDrop={handleMainAreaDrop}
           >
+            {(busyCount > 0 || isLoading) && (
+              <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/10" aria-busy="true">
+                <CircularLoader large />
+              </div>
+            )}
             <div className="mb-6">
               {isDragOver && (
                 <div className="fixed inset-0 bg-drive-blue/10 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -653,33 +697,332 @@ export function ResourceRepository() {
                 </div>
               )}
               
-              <h2 className="text-2xl font-semibold text-foreground mb-2">
-                {activeSection === 'my-drive' && 'My Drive'}
-                {activeSection === 'shared' && 'Shared Items'}
-                {activeSection === 'recent' && 'Recent'}
-                {activeSection === 'starred' && 'Starred'}
-                {activeSection === 'trash' && 'Trash'}
-              </h2>
-              <p className="text-muted-foreground">
-                {filteredFiles.length} {filteredFiles.length === 1 ? 'item' : 'items'}
-                {searchQuery && ` matching "${searchQuery}"`}
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-2xl font-semibold text-foreground mb-2">
+                    {activeSection === 'my-drive' && 'My Drive'}
+                    {activeSection === 'shared' && 'Shared Items'}
+                    {activeSection === 'recent' && 'Recent'}
+                    {activeSection === 'starred' && 'Starred'}
+                    {activeSection === 'trash' && 'Trash'}
+                  </h2>
+                  <p className="text-muted-foreground">
+                    {filteredFiles.length} {filteredFiles.length === 1 ? 'item' : 'items'}
+                    {searchQuery && ` matching "${searchQuery}"`}
+                  </p>
+                </div>
+                
+                {/* Debug buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => withBusy(() => refreshFolders())}
+                    className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                  >
+                    Refresh Folders
+                  </button>
+                  <button
+                    onClick={() => console.log('Current folders:', dhis2Folders)}
+                    className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                  >
+                    Log Folders
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const keys = await dataStoreAPI.getNamespaceKeys();
+                        console.log('API Namespace Keys:', keys);
+                        const folders = await dataStoreAPI.getAllFolders();
+                        console.log('API All Folders:', folders);
+                      } catch (error) {
+                        console.error('API Check Error:', error);
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
+                  >
+                    Check API
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Initializing required keys...');
+                        await withBusy(() => dataStoreAPI.manualInitialize());
+                        console.log('Required keys initialized successfully');
+                        alerts.success('Required keys initialized successfully');
+                        // Refresh the data after initialization
+                        await withBusy(async () => {
+                          await refreshFolders();
+                          await refreshFiles();
+                          await refreshSettings();
+                          await refreshPermissions();
+                        });
+                      } catch (error) {
+                        console.error('Failed to initialize required keys:', error);
+                        alerts.critical('Failed to initialize required keys');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-orange-500 text-white rounded hover:bg-orange-600"
+                  >
+                    Init Keys
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Checking current key status...');
+                        const settings = await dataStoreAPI.getSettings();
+                        const permissions = await dataStoreAPI.getPermissions();
+                        console.log('Current settings:', settings);
+                        console.log('Current permissions:', permissions);
+                         alerts.success(`Settings: ${Object.keys(settings).length} keys, Permissions: ${permissions.length} items`);
+                      } catch (error) {
+                        console.error('Failed to check key status:', error);
+                        alerts.critical('Failed to check key status');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-teal-500 text-white rounded hover:bg-teal-600"
+                  >
+                    Check Keys
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Checking detailed key status...');
+                        const keysWithStatus = await dataStoreAPI.getNamespaceKeysWithStatus();
+                        console.log('Keys with status:', keysWithStatus);
+                        const existingKeys = keysWithStatus.filter(k => k.exists).map(k => k.key);
+                        const missingKeys = keysWithStatus.filter(k => !k.exists).map(k => k.key);
+                         alerts.success(`Existing: ${existingKeys.join(', ') || 'none'}, Missing: ${missingKeys.join(', ') || 'none'}`);
+                      } catch (error) {
+                        console.error('Failed to check detailed key status:', error);
+                        alerts.critical('Failed to check detailed key status');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-cyan-500 text-white rounded hover:bg-cyan-600"
+                  >
+                    Key Status
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Testing connectivity...');
+                        const result = await dataStoreAPI.testConnectivity();
+                        console.log('Connectivity test result:', result);
+                         alerts.success(`API: ${result.apiAccessible ? 'OK' : 'FAIL'}, Namespace: ${result.namespaceAccessible ? 'OK' : 'FAIL'}, Keys: ${result.keysCount}`);
+                      } catch (error) {
+                        console.error('Failed to test connectivity:', error);
+                        alerts.critical('Failed to test connectivity');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-pink-500 text-white rounded hover:bg-pink-600"
+                  >
+                    Test API
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Testing simple API request...');
+                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/system/info', {
+                          method: 'GET',
+                          headers: {
+                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Content-Type': 'application/json',
+                          },
+                        });
+                        console.log('Simple API response:', response);
+                        if (response.ok) {
+                          const data = await response.json();
+                          console.log('Simple API data:', data);
+                         alerts.success('Simple API test successful');
+                        } else {
+                           alerts.critical(`Simple API test failed: ${response.status}`);
+                        }
+                      } catch (error) {
+                        console.error('Simple API test failed:', error);
+                         alerts.critical('Simple API test failed');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Simple Test
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Testing data store endpoint...');
+                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository', {
+                          method: 'GET',
+                          headers: {
+                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Content-Type': 'application/json',
+                          },
+                        });
+                        console.log('Data store response:', response);
+                        if (response.ok) {
+                          const data = await response.json();
+                          console.log('Data store data:', data);
+                           alerts.success('Data store test successful');
+                        } else {
+                          const errorText = await response.text().catch(() => 'Unable to read error');
+                          console.log('Data store error text:', errorText);
+                           alerts.critical(`Data store test failed: ${response.status} - ${errorText}`);
+                        }
+                      } catch (error) {
+                        console.error('Data store test failed:', error);
+                         alerts.critical('Data store test failed');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                  >
+                    Data Store Test
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Testing data store key creation...');
+                        const testData = { test: true, timestamp: new Date().toISOString() };
+                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository/test-key', {
+                          method: 'POST',
+                          headers: {
+                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify(testData),
+                        });
+                        console.log('Key creation response:', response);
+                        if (response.ok) {
+                           alerts.success('Key creation test successful');
+                          // Clean up the test key
+                          await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository/test-key', {
+                            method: 'DELETE',
+                            headers: {
+                              'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            },
+                          });
+                        } else {
+                          const errorText = await response.text().catch(() => 'Unable to read error');
+                          console.log('Key creation error text:', errorText);
+                           alerts.critical(`Key creation test failed: ${response.status} - ${errorText}`);
+                        }
+                      } catch (error) {
+                        console.error('Key creation test failed:', error);
+                         alerts.critical('Key creation test failed');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-lime-500 text-white rounded hover:bg-lime-600"
+                  >
+                    Create Key Test
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Testing settings endpoint...');
+                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository/settings', {
+                          method: 'GET',
+                          headers: {
+                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Content-Type': 'application/json',
+                          },
+                        });
+                        console.log('Settings response:', response);
+                        if (response.ok) {
+                          const data = await response.json();
+                          console.log('Settings data:', data);
+                           alerts.success('Settings test successful');
+                        } else {
+                          const errorText = await response.text().catch(() => 'Unable to read error');
+                          console.log('Settings error text:', errorText);
+                           alerts.critical(`Settings test failed: ${response.status} - ${errorText}`);
+                        }
+                      } catch (error) {
+                        console.error('Settings test failed:', error);
+                         alerts.critical('Settings test failed');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
+                  >
+                    Settings Test
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        console.log('Refreshing all data...');
+                        await withBusy(async () => {
+                          await refreshFolders();
+                          await refreshFiles();
+                          await refreshSettings();
+                          await refreshPermissions();
+                        });
+                         alerts.success('All data refreshed successfully');
+                      } catch (error) {
+                        console.error('Failed to refresh data:', error);
+                         alerts.critical('Failed to refresh data');
+                      }
+                    }}
+                    className="px-3 py-1 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600"
+                  >
+                    Refresh All
+                  </button>
+                </div>
+                
+                {/* Debug info display */}
+                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                  <div>Files: {debugInfo.totalFiles} | Folders: {debugInfo.totalFolders}</div>
+                  <div>Current: {debugInfo.currentFolder || 'root'} | Filtered: {debugInfo.filteredCount}</div>
+                </div>
+              </div>
             </div>
             
             {filteredFiles.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
-                  <div className="w-12 h-12 bg-muted-foreground/20 rounded-lg"></div>
-                </div>
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  {searchQuery ? 'No files found' : 'This folder is empty'}
-                </h3>
-                <p className="text-muted-foreground max-w-md">
-                  {searchQuery 
-                    ? `No files or folders match "${searchQuery}". Try adjusting your search terms.`
-                    : 'Get started by uploading files or creating folders.'
-                  }
-                </p>
+              <div className="py-12 max-w-2xl mx-auto">
+                <NoticeBox title={
+                  activeSection === 'trash'
+                    ? 'Trash is empty'
+                    : searchQuery
+                      ? 'No files found'
+                      : 'This folder is empty'
+                }>
+                  <div className="space-y-3">
+                    <p>
+                      {activeSection === 'trash'
+                        ? 'Deleted items will appear here. You cannot upload to Trash.'
+                        : searchQuery
+                          ? `No files or folders match "${searchQuery}". Try adjusting your search terms.`
+                          : 'Get started by uploading files or creating folders.'}
+                    </p>
+                    {activeSection === 'trash' ? (
+                      <div className="flex flex-wrap gap-8 items-center">
+                        <Button secondary onClick={handleGoToMyDrive}>
+                          <span className="inline-flex items-center gap-2">
+                            <IconFolder24 />
+                            Go to My Drive
+                          </span>
+                        </Button>
+                      </div>
+                    ) : (
+                      !searchQuery && (
+                        <div className="flex flex-wrap gap-8 items-center">
+                          <Button primary onClick={handleFileUploadClick}>
+                            <span className="inline-flex items-center gap-2">
+                              <IconUpload24 />
+                              Upload files
+                            </span>
+                          </Button>
+                          <Button secondary onClick={handleNewFolderClick}>
+                            <span className="inline-flex items-center gap-2">
+                              <IconFolder24 />
+                              New folder
+                            </span>
+                          </Button>
+                          <Button secondary onClick={handleFolderUploadClick}>
+                            <span className="inline-flex items-center gap-2">
+                              <IconFolder24 />
+                              Upload folder
+                            </span>
+                          </Button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </NoticeBox>
               </div>
             ) : (
               <FileGrid
@@ -689,6 +1032,201 @@ export function ResourceRepository() {
                 onItemAction={handleItemAction}
               />
             )}
+            
+            {/* Debug Panel */}
+            <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
+              <h3 className="text-sm font-semibold mb-2">Debug Information</h3>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <strong>DHIS2 Files:</strong> {dhis2Files.length}
+                  <br />
+                  <strong>DHIS2 Folders:</strong> {dhis2Folders.length}
+                  <br />
+                  <strong>All Items:</strong> {allFiles.length}
+                </div>
+                <div>
+                  <strong>Filtered Items:</strong> {filteredFiles.length}
+                  <br />
+                  <strong>Current Folder:</strong> {currentFolderId || 'root'}
+                  <br />
+                  <strong>Active Section:</strong> {activeSection}
+                </div>
+              </div>
+              <div className="mt-2 text-xs">
+                <strong>Folder Details:</strong>
+                <pre className="mt-1 p-2 bg-background rounded text-xs overflow-auto max-h-32">
+                  {JSON.stringify(dhis2Folders, null, 2)}
+                </pre>
+              </div>
+              
+              {/* Key Status Information */}
+              <div className="mt-2 text-xs">
+                <strong>Key Status:</strong>
+                <div className="mt-1 p-2 bg-background rounded">
+                  <div>Settings: {Object.keys(dhis2Settings || {}).length > 0 ? 'Loaded' : 'Not loaded'}</div>
+                  <div>Permissions: {dhis2Permissions.length > 0 ? 'Loaded' : 'Not loaded'}</div>
+                  <div>Users: {dhis2Users.length > 0 ? 'Loaded' : 'Not loaded'}</div>
+                  <div>Audit Logs: {dhis2AuditLogs.length > 0 ? 'Loaded' : 'Not loaded'}</div>
+                </div>
+              </div>
+              
+              {/* Settings and Permissions Details */}
+              <div className="mt-2 text-xs">
+                <strong>Settings Details:</strong>
+                <div className="mt-1 p-2 bg-background rounded">
+                  <div className="mb-2">
+                    <button
+                    onClick={async () => {
+                        try {
+                        await withBusy(() => refreshSettings());
+                          alerts.success('Settings refreshed');
+                        } catch (error) {
+                          console.error('Failed to refresh settings:', error);
+                          alerts.critical('Failed to refresh settings');
+                        }
+                      }}
+                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 mr-1"
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const settings = await dataStoreAPI.getSettings();
+                          console.log('Current settings:', settings);
+                          alerts.success(`Settings: ${Object.keys(settings || {}).length} keys`);
+                        } catch (error) {
+                          console.error('Failed to get settings:', error);
+                          alerts.critical('Failed to get settings');
+                        }
+                      }}
+                      className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                    >
+                      Get
+                    </button>
+                  </div>
+                  <pre className="text-xs overflow-auto max-h-24">
+                    {JSON.stringify(dhis2Settings || {}, null, 2)}
+                  </pre>
+                </div>
+              </div>
+              
+              <div className="mt-2 text-xs">
+                <strong>Permissions Details:</strong>
+                <div className="mt-1 p-2 bg-background rounded">
+                  <div className="mb-2">
+                    <button
+                    onClick={async () => {
+                        try {
+                        await withBusy(() => refreshPermissions());
+                          alerts.success('Permissions refreshed');
+                        } catch (error) {
+                          console.error('Failed to refresh permissions:', error);
+                          alerts.critical('Failed to refresh permissions');
+                        }
+                      }}
+                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 mr-1"
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const permissions = await dataStoreAPI.getPermissions();
+                          console.log('Current permissions:', permissions);
+                          alerts.success(`Permissions: ${permissions?.length || 0} items`);
+                        } catch (error) {
+                          console.error('Failed to get permissions:', error);
+                          alerts.critical('Failed to get permissions');
+                        }
+                      }}
+                      className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                    >
+                      Get
+                    </button>
+                  </div>
+                  <pre className="text-xs overflow-auto max-h-24">
+                    {JSON.stringify(dhis2Permissions || [], null, 2)}
+                  </pre>
+                </div>
+              </div>
+              
+              {/* Namespace Keys */}
+              <div className="mt-2 text-xs">
+                <strong>Namespace Keys:</strong>
+                <div className="mt-1 p-2 bg-background rounded">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const keys = await dataStoreAPI.getNamespaceKeys();
+                        console.log('Namespace keys:', keys);
+                        alerts.success(`Found ${keys.length} keys: ${keys.join(', ') || 'none'}`);
+                      } catch (error) {
+                        console.error('Failed to get namespace keys:', error);
+                        alerts.critical('Failed to get namespace keys');
+                      }
+                    }}
+                    className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                  >
+                    Get Keys
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const result = await dataStoreAPI.testConnectivity();
+                        console.log('Connectivity result:', result);
+                        alerts.success(`API: ${result.apiAccessible ? 'OK' : 'FAIL'}, Namespace: ${result.namespaceAccessible ? 'OK' : 'FAIL'}`);
+                      } catch (error) {
+                        console.error('Failed to test connectivity:', error);
+                        alerts.critical('Failed to test connectivity');
+                      }
+                    }}
+                    className="px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 ml-1"
+                  >
+                    Test
+                  </button>
+                </div>
+              </div>
+              
+              {/* Configuration Information */}
+              <div className="mt-2 text-xs">
+                <strong>Configuration:</strong>
+                <div className="mt-1 p-2 bg-background rounded">
+                  <div>Base URL: {import.meta.env.VITE_DHIS2_URL || 'https://upgrade.dhis2.udsm.ac.tz'}</div>
+                  <div>Username: {import.meta.env.VITE_DHIS2_USERNAME || 'josephwambura'}</div>
+                  <div>Namespace: resource-repository</div>
+                  <div>API Base: /api</div>
+                </div>
+              </div>
+              
+              {/* Test Folder Creation */}
+              <div className="mt-4 p-3 bg-background rounded border">
+                <h4 className="text-sm font-semibold mb-2">Test Folder Creation</h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Folder name"
+                    className="flex-1 px-2 py-1 text-xs border rounded"
+                    id="test-folder-name"
+                  />
+                  <button
+                    onClick={async () => {
+                      const input = document.getElementById('test-folder-name') as HTMLInputElement;
+                      const name = input.value;
+                      if (name) {
+                        console.log('Testing folder creation:', name);
+                        const result = await createFolder(name, currentFolderId);
+                        console.log('Test result:', result);
+                        input.value = '';
+                      }
+                    }}
+                    className="px-3 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600"
+                  >
+                    Test Create
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </main>
       </div>

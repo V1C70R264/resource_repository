@@ -7,7 +7,7 @@ import {
   IconWarning24
 } from "@dhis2/ui-icons";
 import { toast } from "sonner";
-import { uploadFileToNamespace } from "@/lib/dhis2-api";
+import { dataStoreAPI } from "@/lib/dhis2-api";
 
 interface FileUploadItem {
   id: string;
@@ -15,12 +15,13 @@ interface FileUploadItem {
   status: 'pending' | 'uploading' | 'completed' | 'error';
   progress: number;
   error?: string;
+  uploadedFile?: any; // DHIS2File object after successful upload
 }
 
 interface FileUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUploadComplete: (files: File[], folderId?: string) => void;
+  onUploadComplete: (files: any[], folderId?: string) => void;
   currentFolderId?: string | null;
   currentFolderName?: string;
 }
@@ -34,6 +35,7 @@ export function FileUploadDialog({
 }: FileUploadDialogProps) {
   const [uploadFiles, setUploadFiles] = useState<FileUploadItem[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (files: FileList | null) => {
@@ -71,48 +73,101 @@ export function FileUploadDialog({
     setUploadFiles(prev => prev.filter(f => f.id !== id));
   };
 
-  const simulateUpload = async (fileItem: FileUploadItem) => {
-    setUploadFiles(prev => prev.map(f => 
-      f.id === fileItem.id ? { ...f, status: 'uploading' } : f
-    ));
-
-    // Simulate upload progress
-    for (let progress = 0; progress <= 100; progress += 10) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+  // Return the uploaded file object on success, null on failure
+  const uploadSingleFile = async (fileItem: FileUploadItem): Promise<any | null> => {
+    try {
+      // Update status to uploading
       setUploadFiles(prev => prev.map(f => 
-        f.id === fileItem.id ? { ...f, progress } : f
+        f.id === fileItem.id ? { ...f, status: 'uploading', progress: 10 } : f
       ));
-    }
 
-    setUploadFiles(prev => prev.map(f => 
-      f.id === fileItem.id ? { ...f, status: 'completed', progress: 100 } : f
-    ));
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setUploadFiles(prev => prev.map(f => {
+          if (f.id === fileItem.id && f.status === 'uploading' && f.progress < 90) {
+            return { ...f, progress: Math.min(f.progress + 10, 90) };
+          }
+          return f;
+        }));
+      }, 200);
+
+      // Upload file using DHIS2 DataStore API
+      const uploadedFile = await dataStoreAPI.uploadFile(fileItem.file, currentFolderId || undefined);
+      
+      clearInterval(progressInterval);
+      
+      // Update status to completed and store the uploaded file object
+      setUploadFiles(prev => prev.map(f => 
+        f.id === fileItem.id ? { 
+          ...f, 
+          status: 'completed', 
+          progress: 100, 
+          uploadedFile 
+        } : f
+      ));
+
+      console.log(`[DEBUG] File "${fileItem.file.name}" uploaded successfully:`, uploadedFile);
+      return uploadedFile;
+
+    } catch (error) {
+      console.error(`[DEBUG] Error uploading file "${fileItem.file.name}":`, error);
+      
+      // Update status to error
+      setUploadFiles(prev => prev.map(f => 
+        f.id === fileItem.id ? { 
+          ...f, 
+          status: 'error', 
+          error: error instanceof Error ? error.message : 'Upload failed' 
+        } : f
+      ));
+
+      return null;
+    }
   };
 
   const handleUpload = async () => {
     const pendingFiles = uploadFiles.filter(f => f.status === 'pending');
+    
+    if (pendingFiles.length === 0) {
+      toast.error('No files to upload');
+      return;
+    }
 
-    await Promise.all(pendingFiles.map(async (fileItem) => {
-      console.log(`[DEV] Attempting to upload file: ${fileItem.file.name} to folder/namespace: ${currentFolderName}`);
-      const success = await uploadFileToNamespace(currentFolderName || 'my-drive', fileItem.file);
-      if (success) {
-        toast.success(`File "${fileItem.file.name}" uploaded successfully`);
-      } else {
-        toast.error(`Failed to upload file "${fileItem.file.name}"`);
+    setIsUploading(true);
+
+    try {
+      const successfulUploads: any[] = [];
+      // Upload files sequentially to avoid overwhelming the API
+      for (const fileItem of pendingFiles) {
+        const uploaded = await uploadSingleFile(fileItem);
+        if (uploaded) {
+          successfulUploads.push(uploaded);
+          toast.success(`File "${fileItem.file.name}" uploaded successfully`);
+        } else {
+          toast.error(`Failed to upload file "${fileItem.file.name}"`);
+        }
       }
-    }));
 
-    // Call the completion handler with the actual files
-    const completedFiles = uploadFiles.map(f => f.file);
-    onUploadComplete(completedFiles, currentFolderId);
+      // Always notify parent to refresh UI, even if 0 succeeded
+      onUploadComplete(successfulUploads, currentFolderId || undefined);
 
-    // Clear and close
-    setUploadFiles([]);
-    onOpenChange(false);
+      // Clear and close after a short delay to show completion
+      setTimeout(() => {
+        setUploadFiles([]);
+        setIsUploading(false);
+        onOpenChange(false);
+      }, 800);
+
+    } catch (error) {
+      console.error('[DEBUG] Error during batch upload:', error);
+      toast.error('Upload process failed');
+      setIsUploading(false);
+    }
   };
 
   const handleClose = () => {
     setUploadFiles([]);
+    setIsUploading(false);
     onOpenChange(false);
   };
 
@@ -130,6 +185,7 @@ export function FileUploadDialog({
 
   const pendingCount = uploadFiles.filter(f => f.status === 'pending').length;
   const completedCount = uploadFiles.filter(f => f.status === 'completed').length;
+  const errorCount = uploadFiles.filter(f => f.status === 'error').length;
   const totalCount = uploadFiles.length;
 
   return (
@@ -138,7 +194,7 @@ export function FileUploadDialog({
         <Modal
           onClose={() => onOpenChange(false)}
         >
-                     <div style={{ padding: '24px', maxWidth: '600px', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '24px', maxWidth: '600px', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
             {/* Header */}
             <div style={{ marginBottom: '24px' }}>
               <div style={{ 
@@ -164,49 +220,50 @@ export function FileUploadDialog({
             </div>
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                             {/* Drop Zone */}
-               <div
-                 style={{
-                   border: `2px dashed ${isDragOver ? '#2196f3' : '#e1e5e9'}`,
-                   borderRadius: '8px',
-                   padding: '24px',
-                   textAlign: 'center',
-                   backgroundColor: isDragOver ? '#e3f2fd' : 'transparent',
-                   transition: 'all 0.2s ease'
-                 }}
+              {/* Drop Zone */}
+              <div
+                style={{
+                  border: `2px dashed ${isDragOver ? '#2196f3' : '#e1e5e9'}`,
+                  borderRadius: '8px',
+                  padding: '24px',
+                  textAlign: 'center',
+                  backgroundColor: isDragOver ? '#e3f2fd' : 'transparent',
+                  transition: 'all 0.2s ease'
+                }}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                                 <div style={{ 
-                   width: '40px', 
-                   height: '40px', 
-                   color: '#666',
-                   margin: '0 auto 12px auto',
-                   display: 'flex',
-                   justifyContent: 'center',
-                   alignItems: 'center'
-                 }}>
-                   <IconUpload24 />
-                 </div>
-                                 <h3 style={{ 
-                   fontSize: '16px', 
-                   fontWeight: '500', 
-                   marginBottom: '6px',
-                   color: '#333'
-                 }}>
-                   {isDragOver ? 'Drop files here' : 'Drag files here or click to browse'}
-                 </h3>
-                 <p style={{ 
-                   color: '#666', 
-                   marginBottom: '12px',
-                   fontSize: '14px'
-                 }}>
-                   You can upload multiple files at once
-                 </p>
+                <div style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  color: '#666',
+                  margin: '0 auto 12px auto',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}>
+                  <IconUpload24 />
+                </div>
+                <h3 style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '500', 
+                  marginBottom: '6px',
+                  color: '#333'
+                }}>
+                  {isDragOver ? 'Drop files here' : 'Drag files here or click to browse'}
+                </h3>
+                <p style={{ 
+                  color: '#666', 
+                  marginBottom: '12px',
+                  fontSize: '14px'
+                }}>
+                  You can upload multiple files at once (max 50MB per file)
+                </p>
                 <Button
                   secondary
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
                 >
                   Browse files
                 </Button>
@@ -216,6 +273,7 @@ export function FileUploadDialog({
                   multiple
                   style={{ display: 'none' }}
                   onChange={(e) => handleFileSelect(e.target.files)}
+                  disabled={isUploading}
                 />
               </div>
 
@@ -230,35 +288,46 @@ export function FileUploadDialog({
                     <h4 style={{ fontWeight: '500', fontSize: '16px' }}>
                       Files to upload ({totalCount})
                     </h4>
-                    {completedCount > 0 && (
-                      <span style={{ 
-                        fontSize: '14px', 
-                        color: '#666'
-                      }}>
-                        {completedCount} of {totalCount} completed
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '14px', color: '#666' }}>
+                      {completedCount > 0 && (
+                        <span style={{ color: '#4caf50' }}>
+                          {completedCount} completed
+                        </span>
+                      )}
+                      {errorCount > 0 && (
+                        <span style={{ color: '#f44336' }}>
+                          {errorCount} failed
+                        </span>
+                      )}
+                      {pendingCount > 0 && (
+                        <span>
+                          {pendingCount} pending
+                        </span>
+                      )}
+                    </div>
                   </div>
                   
-                                     <div style={{ 
-                     maxHeight: '200px', 
-                     overflowY: 'auto',
-                     border: '1px solid #e1e5e9',
-                     borderRadius: '8px',
-                     padding: '8px'
-                   }}>
+                  <div style={{ 
+                    maxHeight: '200px', 
+                    overflowY: 'auto',
+                    border: '1px solid #e1e5e9',
+                    borderRadius: '8px',
+                    padding: '8px'
+                  }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {uploadFiles.map((fileItem) => (
                         <div
                           key={fileItem.id}
-                                                     style={{
-                             display: 'flex',
-                             alignItems: 'center',
-                             gap: '12px',
-                             padding: '8px',
-                             backgroundColor: '#f8f9fa',
-                             borderRadius: '6px'
-                           }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '8px',
+                            backgroundColor: fileItem.status === 'error' ? '#ffebee' : 
+                                           fileItem.status === 'completed' ? '#e8f5e8' : '#f8f9fa',
+                            borderRadius: '6px',
+                            border: fileItem.status === 'error' ? '1px solid #ffcdd2' : 'none'
+                          }}
                         >
                           {getFileIcon(fileItem.file.name)}
                           
@@ -296,29 +365,40 @@ export function FileUploadDialog({
                                 }} />
                               </div>
                             )}
+
+                            {fileItem.status === 'error' && fileItem.error && (
+                              <p style={{ 
+                                fontSize: '12px', 
+                                color: '#f44336',
+                                marginTop: '4px'
+                              }}>
+                                {fileItem.error}
+                              </p>
+                            )}
                           </div>
 
-                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                             {fileItem.status === 'completed' && (
-                               <div style={{ color: '#4caf50' }}>
-                                 <IconCheckmark24 />
-                               </div>
-                             )}
-                             {fileItem.status === 'error' && (
-                               <div style={{ color: '#f44336' }}>
-                                 <IconWarning24 />
-                               </div>
-                             )}
-                             {fileItem.status === 'pending' && (
-                               <Button
-                                 secondary
-                                 onClick={() => removeFile(fileItem.id)}
-                                 style={{ padding: '4px', minWidth: '32px', height: '32px' }}
-                               >
-                                 ×
-                               </Button>
-                             )}
-                           </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {fileItem.status === 'completed' && (
+                              <div style={{ color: '#4caf50' }}>
+                                <IconCheckmark24 />
+                              </div>
+                            )}
+                            {fileItem.status === 'error' && (
+                              <div style={{ color: '#f44336' }}>
+                                <IconWarning24 />
+                              </div>
+                            )}
+                            {fileItem.status === 'pending' && (
+                              <Button
+                                secondary
+                                onClick={() => removeFile(fileItem.id)}
+                                style={{ padding: '4px', minWidth: '32px', height: '32px' }}
+                                disabled={isUploading}
+                              >
+                                ×
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -335,15 +415,15 @@ export function FileUploadDialog({
               borderTop: '1px solid #e1e5e9',
               marginTop: '16px'
             }}>
-              <Button secondary onClick={handleClose}>
+              <Button secondary onClick={handleClose} disabled={isUploading}>
                 Cancel
               </Button>
               <Button
                 primary
                 onClick={handleUpload}
-                disabled={pendingCount === 0}
+                disabled={pendingCount === 0 || isUploading}
               >
-                Upload {pendingCount > 0 ? `${pendingCount} files` : ''}
+                {isUploading ? 'Uploading...' : `Upload ${pendingCount > 0 ? `${pendingCount} files` : ''}`}
               </Button>
             </div>
           </div>

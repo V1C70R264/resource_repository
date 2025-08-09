@@ -130,8 +130,8 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
       modified: dhis2Folder.modified,
       created: dhis2Folder.created,
       owner: dhis2Folder.owner,
-      starred: false,
-      shared: false,
+      starred: dhis2Folder.starred || false,
+      shared: dhis2Folder.shared || false,
       tags: dhis2Folder.tags,
       parentId: dhis2Folder.parentId,
       path: dhis2Folder.path,
@@ -177,6 +177,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
         version: file.version,
         parentId: file.parentId,
         path: file.path,
+        uploadStatus: 'uploading'
       };
       
       const success = await dataStoreAPI.saveFile(dhis2File);
@@ -220,24 +221,17 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     setLoadingFolders(true);
     setErrorFolders(null);
     try {
-      // Fetch all namespaces (folders) from DHIS2
-      const namespaces = await dataStoreAPI.getAllNamespaces();
-      // Convert each namespace to a FileItem representing a folder
-      const convertedFolders = namespaces.map((ns) => ({
-        id: ns,
-        name: ns,
-        type: 'folder' as const,
-        path: `/${ns}`,
-        created: '',
-        modified: '',
-        owner: '',
-        description: '',
-        tags: [],
-        starred: false,
-        shared: false,
-      }));
+      // Fetch all folders from DHIS2 Data Store (not namespaces)
+      const dhis2Folders = await dataStoreAPI.getAllFolders();
+      console.log('[DEBUG] refreshFolders - Retrieved folders:', dhis2Folders);
+      
+      // Convert DHIS2Folder objects to FileItem objects
+      const convertedFolders = dhis2Folders.map((folder) => convertDHIS2FolderToFileItem(folder));
+      console.log('[DEBUG] refreshFolders - Converted folders:', convertedFolders);
+      
       setFolders(convertedFolders);
     } catch (error) {
+      console.error('[DEBUG] refreshFolders - Error:', error);
       setErrorFolders(error instanceof Error ? error.message : 'Failed to load folders');
     } finally {
       setLoadingFolders(false);
@@ -255,6 +249,8 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
         created: folder.created,
         modified: folder.modified,
         owner: folder.owner,
+        starred: folder.starred || false,
+        shared: folder.shared || false,
         description: folder.description,
         tags: folder.tags,
         permissions: [],
@@ -273,15 +269,72 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
 
   const createFolder = useCallback(async (name: string, parentId?: string): Promise<FileItem | null> => {
     try {
-      const createdFolder = await dataStoreAPI.createFolder(name, parentId);
+      console.log('[DEBUG] createFolder - Creating folder:', { name, parentId });
+      
+      // Validate input
+      if (!name || name.trim().length === 0) {
+        throw new Error('Folder name cannot be empty');
+      }
+      
+      // Check if folder with same name already exists in the same parent
+      const existingFolder = folders.find(f => 
+        f.name === name.trim() && f.parentId === parentId
+      );
+      
+      if (existingFolder) {
+        throw new Error(`A folder with the name "${name}" already exists in this location`);
+      }
+      
+      const createdFolder = await dataStoreAPI.createFolder(name.trim(), parentId);
+      console.log('[DEBUG] createFolder - Folder created in API:', createdFolder);
+      
+      if (!createdFolder) {
+        throw new Error('Failed to create folder - API returned null');
+      }
+      
+      // Verify the folder was actually saved by checking the API
+      const verificationKey = `folder_${createdFolder.id}`;
+      console.log('[DEBUG] createFolder - Verifying folder with key:', verificationKey);
+      
+      // Wait a moment for the API to process
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const savedFolder = await dataStoreAPI.getFolder(createdFolder.id);
+      console.log('[DEBUG] createFolder - Verification result:', savedFolder);
+      
+      if (!savedFolder) {
+        console.error('[DEBUG] createFolder - Folder not found after creation!');
+        // Don't throw here, but log the issue for debugging
+        // The folder might still be created but not immediately retrievable
+      }
+      
       const convertedFolder = convertDHIS2FolderToFileItem(createdFolder);
+      console.log('[DEBUG] createFolder - Converted to FileItem:', convertedFolder);
+      
+      // Refresh the folders list to include the new folder
       await refreshFolders();
+      console.log('[DEBUG] createFolder - Folders refreshed after creation');
+      
       return convertedFolder;
     } catch (error) {
-      console.error('Error creating folder:', error);
-      return null;
+      console.error('[DEBUG] createFolder - Error:', error);
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          throw new Error('Network error - please check your connection and try again');
+        } else if (error.message.includes('401') || error.message.includes('403')) {
+          throw new Error('Authentication error - please check your credentials');
+        } else if (error.message.includes('500')) {
+          throw new Error('Server error - please try again later');
+        } else {
+          throw error; // Re-throw the original error
+        }
+      } else {
+        throw new Error('An unexpected error occurred while creating the folder');
+      }
     }
-  }, [refreshFolders]);
+  }, [refreshFolders, folders]);
 
   const deleteFolder = useCallback(async (folderId: string): Promise<boolean> => {
     try {

@@ -6,20 +6,21 @@ import {
   IconUpload24
 } from "@dhis2/ui-icons";
 import { toast } from "sonner";
-import { uploadFileToNamespace } from "@/lib/dhis2-api";
+import { dataStoreAPI, DHIS2Folder } from "@/lib/dhis2-api";
 
 interface FolderUploadItem {
   id: string;
   name: string;
   files: File[];
-  status: 'pending' | 'uploading' | 'completed';
+  status: 'pending' | 'uploading' | 'completed' | 'error';
   progress: number;
+  error?: string;
 }
 
 interface FolderUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUploadComplete: (folders: { name: string; files: File[] }[], folderId?: string) => void;
+  onUploadComplete: (result: { createdFolders: any[]; uploadedFiles: any[] }, folderId?: string) => void;
   currentFolderId?: string | null;
   currentFolderName?: string;
 }
@@ -33,6 +34,7 @@ export function FolderUploadDialog({
 }: FolderUploadDialogProps) {
   const [uploadFolders, setUploadFolders] = useState<FolderUploadItem[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleFolderSelect = (files: FileList | null) => {
@@ -76,73 +78,141 @@ export function FolderUploadDialog({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
-    const items = Array.from(e.dataTransfer.items);
-    const files: File[] = [];
-    
-    items.forEach(item => {
-      if (item.kind === 'file') {
-        const entry = item.webkitGetAsEntry();
-        if (entry?.isDirectory) {
-          // Handle directory drop - this is more complex and would need recursive reading
-          // For now, we'll show a message to use the folder input
-          console.log('Directory dropped, use folder input instead');
-        }
-      }
-    });
+    // For folder drag-and-drop, browsers differ; rely on the folder picker for now
   };
 
   const removeFolder = (id: string) => {
     setUploadFolders(prev => prev.filter(f => f.id !== id));
   };
 
-  const simulateUpload = async (folderItem: FolderUploadItem) => {
-    setUploadFolders(prev => prev.map(f => 
-      f.id === folderItem.id ? { ...f, status: 'uploading' } : f
-    ));
+  // Ensure a folder exists by name under a parent. Uses cache of existing folders to avoid duplicates.
+  const ensureFolder = async (
+    name: string, 
+    parentId: string | undefined, 
+    folderCache: Map<string, DHIS2Folder>
+  ): Promise<DHIS2Folder> => {
+    const cacheKey = `${parentId || 'root'}|${name}`;
+    const cached = folderCache.get(cacheKey);
+    if (cached) return cached;
 
-    // Simulate upload progress
-    for (let progress = 0; progress <= 100; progress += 10) {
-      await new Promise(resolve => setTimeout(resolve, 150));
-      setUploadFolders(prev => prev.map(f => 
-        f.id === folderItem.id ? { ...f, progress } : f
-      ));
+    // Try to find in existing folders (first load all folders once outside)
+    const existingFolders = await dataStoreAPI.getAllFolders();
+    const found = existingFolders.find(f => f.name === name && f.parentId === parentId);
+    if (found) {
+      folderCache.set(cacheKey, found);
+      return found;
     }
 
+    // Create if not found
+    const created = await dataStoreAPI.createFolder(name, parentId);
+    folderCache.set(cacheKey, created);
+    return created;
+  };
+
+  const uploadSingleFolder = async (
+    folderItem: FolderUploadItem,
+    parentId: string | undefined
+  ): Promise<{ createdFolders: any[]; uploadedFiles: any[] }> => {
     setUploadFolders(prev => prev.map(f => 
-      f.id === folderItem.id ? { ...f, status: 'completed', progress: 100 } : f
+      f.id === folderItem.id ? { ...f, status: 'uploading', progress: 10 } : f
     ));
+
+    const createdFolders: any[] = [];
+    const uploadedFiles: any[] = [];
+
+    try {
+      // Cache to prevent duplicate subfolder creation
+      const folderCache = new Map<string, DHIS2Folder>();
+
+      // Create root folder under current parent
+      const rootFolder = await ensureFolder(folderItem.name, parentId, folderCache);
+      createdFolders.push(rootFolder);
+
+      // Progress helper
+      const total = folderItem.files.length;
+      let completed = 0;
+
+      // Process each file, creating subfolders according to relative path
+      for (const file of folderItem.files) {
+        // webkitRelativePath: Root/sub1/sub2/file.ext
+        const parts = file.webkitRelativePath.split('/');
+        // parts[0] is root folder name
+        const subparts = parts.slice(1, -1); // folder segments below root
+
+        let currentParentId = rootFolder.id;
+        // Create/ensure all subfolders
+        for (const sub of subparts) {
+          const subFolder = await ensureFolder(sub, currentParentId, folderCache);
+          createdFolders.push(subFolder);
+          currentParentId = subFolder.id;
+        }
+
+        // Upload the file to the deepest folder
+        const uploaded = await dataStoreAPI.uploadFile(file, currentParentId);
+        uploadedFiles.push(uploaded);
+
+        completed += 1;
+        const progress = Math.min(10 + Math.round((completed / total) * 80), 90);
+        setUploadFolders(prev => prev.map(f => 
+          f.id === folderItem.id ? { ...f, progress } : f
+        ));
+      }
+
+      setUploadFolders(prev => prev.map(f => 
+        f.id === folderItem.id ? { ...f, status: 'completed', progress: 100 } : f
+      ));
+
+      return { createdFolders, uploadedFiles };
+    } catch (error) {
+      console.error('[DEBUG] Folder upload error:', error);
+      setUploadFolders(prev => prev.map(f => 
+        f.id === folderItem.id ? { ...f, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' } : f
+      ));
+      return { createdFolders, uploadedFiles };
+    }
   };
 
   const handleUpload = async () => {
     const pendingFolders = uploadFolders.filter(f => f.status === 'pending');
 
-    for (const folderItem of pendingFolders) {
-      for (const file of folderItem.files) {
-        // Use file.webkitRelativePath to preserve subfolder structure if needed
-        const key = file.webkitRelativePath ? file.webkitRelativePath.replace(/^[^/]+\//, '') : file.name;
-        console.log(`[DEV] Attempting to upload file: ${key} to folder/namespace: ${folderItem.name}`);
-        const fileForUpload = new File([file], key, { type: file.type });
-        const success = await uploadFileToNamespace(folderItem.name, fileForUpload);
-        if (success) {
-          toast.success(`File "${key}" uploaded successfully`);
-        } else {
-          toast.error(`Failed to upload file "${key}"`);
-        }
-      }
+    if (pendingFolders.length === 0) {
+      toast.error('No folders to upload');
+      return;
     }
 
-    // Call the completion handler
-    const completedFolders = uploadFolders.map(f => ({ name: f.name, files: f.files }));
-    onUploadComplete(completedFolders, currentFolderId);
-    
-    // Clear and close
-    setUploadFolders([]);
-    onOpenChange(false);
+    setIsUploading(true);
+
+    try {
+      const aggregateCreated: any[] = [];
+      const aggregateFiles: any[] = [];
+
+      // Sequential to avoid overwhelming API
+      for (const folderItem of pendingFolders) {
+        const result = await uploadSingleFolder(folderItem, currentFolderId || undefined);
+        aggregateCreated.push(...result.createdFolders);
+        aggregateFiles.push(...result.uploadedFiles);
+      }
+
+      // Notify parent; it will refresh folders/files
+      onUploadComplete({ createdFolders: aggregateCreated, uploadedFiles: aggregateFiles }, currentFolderId || undefined);
+
+      // Clear and close after short delay
+      setTimeout(() => {
+        setUploadFolders([]);
+        setIsUploading(false);
+        onOpenChange(false);
+      }, 800);
+
+    } catch (error) {
+      console.error('[DEBUG] Error during folder upload:', error);
+      toast.error('Folder upload failed');
+      setIsUploading(false);
+    }
   };
 
   const handleClose = () => {
     setUploadFolders([]);
+    setIsUploading(false);
     onOpenChange(false);
   };
 
@@ -152,6 +222,7 @@ export function FolderUploadDialog({
 
   const pendingCount = uploadFolders.filter(f => f.status === 'pending').length;
   const completedCount = uploadFolders.filter(f => f.status === 'completed').length;
+  const errorCount = uploadFolders.filter(f => f.status === 'error').length;
   const totalCount = uploadFolders.length;
 
   return (
@@ -229,6 +300,7 @@ export function FolderUploadDialog({
                 <Button
                   secondary
                   onClick={() => folderInputRef.current?.click()}
+                  disabled={isUploading}
                 >
                   Browse folders
                 </Button>
@@ -239,6 +311,7 @@ export function FolderUploadDialog({
                   multiple
                   style={{ display: 'none' }}
                   onChange={(e) => handleFolderSelect(e.target.files)}
+                  disabled={isUploading}
                 />
               </div>
 
@@ -253,14 +326,23 @@ export function FolderUploadDialog({
                     <h4 style={{ fontWeight: '500', fontSize: '16px' }}>
                       Folders to upload ({totalCount})
                     </h4>
-                    {completedCount > 0 && (
-                      <span style={{ 
-                        fontSize: '14px', 
-                        color: '#666'
-                      }}>
-                        {completedCount} of {totalCount} completed
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '14px', color: '#666' }}>
+                      {completedCount > 0 && (
+                        <span style={{ color: '#4caf50' }}>
+                          {completedCount} completed
+                        </span>
+                      )}
+                      {errorCount > 0 && (
+                        <span style={{ color: '#f44336' }}>
+                          {errorCount} failed
+                        </span>
+                      )}
+                      {pendingCount > 0 && (
+                        <span>
+                          {pendingCount} pending
+                        </span>
+                      )}
+                    </div>
                   </div>
                   
                   <div style={{ 
@@ -279,8 +361,10 @@ export function FolderUploadDialog({
                             alignItems: 'center',
                             gap: '12px',
                             padding: '8px',
-                            backgroundColor: '#f8f9fa',
-                            borderRadius: '6px'
+                            backgroundColor: folderItem.status === 'error' ? '#ffebee' : 
+                                           folderItem.status === 'completed' ? '#e8f5e8' : '#f8f9fa',
+                            borderRadius: '6px',
+                            border: folderItem.status === 'error' ? '1px solid #ffcdd2' : 'none'
                           }}
                         >
                           <div style={{ color: '#2196f3' }}>
@@ -334,6 +418,7 @@ export function FolderUploadDialog({
                                 secondary
                                 onClick={() => removeFolder(folderItem.id)}
                                 style={{ padding: '4px', minWidth: '32px', height: '32px' }}
+                                disabled={isUploading}
                               >
                                 ×
                               </Button>
@@ -355,15 +440,15 @@ export function FolderUploadDialog({
               borderTop: '1px solid #e1e5e9',
               marginTop: '16px'
             }}>
-              <Button secondary onClick={handleClose}>
+              <Button secondary onClick={handleClose} disabled={isUploading}>
                 Cancel
               </Button>
               <Button
                 primary
                 onClick={handleUpload}
-                disabled={pendingCount === 0}
+                disabled={pendingCount === 0 || isUploading}
               >
-                Upload {pendingCount > 0 ? `${pendingCount} folders` : ''}
+                {isUploading ? 'Uploading...' : `Upload ${pendingCount > 0 ? `${pendingCount} folders` : ''}`}
               </Button>
             </div>
           </div>

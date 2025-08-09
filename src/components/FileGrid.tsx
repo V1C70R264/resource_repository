@@ -1,503 +1,321 @@
-import { useState } from "react";
-import { 
-  FileText, 
-  Image, 
-  Video, 
-  Music, 
-  Archive, 
-  Folder, 
-  MoreVertical, 
-  Download, 
-  Share, 
-  Star, 
-  Trash2, 
-  Eye,
-  Edit,
-  Clock,
-  Tag,
-  Shield
-} from "lucide-react";
-import { DHIS2Button, DHIS2Card } from "@/components/ui/dhis2-components";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { FileItem } from '@/lib/types';
+import { useState } from 'react'
+import { Button, Card, Modal, Menu, MenuItem, Popover, Tag, DataTable, DataTableHead, DataTableBody, DataTableRow, DataTableCell, DataTableColumnHeader } from '@dhis2/ui'
+import { IconFolder24, IconFileDocument24 } from '@dhis2/ui-icons'
+import { FileItem } from '@/lib/types'
 
 interface FileGridProps {
-  items: FileItem[];
-  viewMode: 'grid' | 'list';
-  onItemClick: (item: FileItem) => void;
-  onItemAction: (action: string, item: FileItem) => void;
+  items: FileItem[]
+  viewMode: 'grid' | 'list'
+  onItemClick: (item: FileItem) => void
+  onItemAction: (action: string, item: FileItem) => void
 }
 
 export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGridProps) {
-  const [selectedItem, setSelectedItem] = useState<FileItem | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<FileItem | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
-  const getFileIcon = (type: string, fileType?: string) => {
-    if (type === 'folder') return Folder;
-    
-    switch (fileType) {
-      case 'image': return Image;
-      case 'video': return Video;
-      case 'audio': return Music;
-      case 'archive': return Archive;
-      default: return FileText;
+  // Single contextual menu using DHIS2 Popover + Menu
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
+  const [menuItem, setMenuItem] = useState<FileItem | null>(null)
+
+  const openMenu = (buttonId: string, item: FileItem) => {
+    const el = document.getElementById(buttonId)
+    if (el) {
+      setMenuAnchor(el)
+      setMenuItem(item)
     }
-  };
+  }
 
-  const getFileColor = (type: string, fileType?: string) => {
-    if (type === 'folder') return 'text-drive-blue';
-    
-    switch (fileType) {
-      case 'image': return 'text-drive-green';
-      case 'video': return 'text-red-500';
-      case 'audio': return 'text-purple-500';
-      case 'archive': return 'text-drive-orange';
-      default: return 'text-blue-500';
-    }
-  };
+  const closeMenu = () => {
+    setMenuAnchor(null)
+    setMenuItem(null)
+  }
 
-  const handleItemClick = (item: FileItem) => {
+  const renderMainIcon = (type: string, fileType?: string) => {
+    const colorClass = type === 'folder' ? 'text-drive-blue' : 'text-blue-500'
+    return (
+      <span className={`w-12 h-12 ${colorClass} inline-flex items-center justify-center`}>
+        {type === 'folder' ? <IconFolder24 /> : <IconFileDocument24 />}
+      </span>
+    )
+  }
+
+  const openItem = (item: FileItem) => {
     if (item.type === 'file') {
-      setSelectedItem(item);
-      setPreviewOpen(true);
+      setSelectedItem(item)
+      setPreviewOpen(true)
     } else {
-      onItemClick(item);
+      onItemClick(item)
     }
-  };
+  }
 
+  // LIST VIEW
   if (viewMode === 'list') {
     return (
       <>
         <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="grid grid-cols-12 gap-4 p-3 bg-muted/30 border-b border-border text-sm font-medium text-muted-foreground">
-            <div className="col-span-5">Name</div>
-            <div className="col-span-2">Owner</div>
-            <div className="col-span-2">Last modified</div>
-            <div className="col-span-2">Size</div>
-            <div className="col-span-1"></div>
-          </div>
-          
-          <div className="divide-y divide-border">
-            {items.map((item) => {
-              const Icon = getFileIcon(item.type, item.fileType);
-              const iconColor = getFileColor(item.type, item.fileType);
-              
-              return (
-                                 <div
-                   key={item.id}
-                   className="group grid grid-cols-12 gap-4 p-3 hover:bg-muted/30 cursor-pointer transition-colors"
-                   onClick={() => handleItemClick(item)}
-                 >
-                  <div className="col-span-5 flex items-center gap-3">
-                    <Icon className={`w-5 h-5 ${iconColor}`} />
-                    <span className="font-medium text-foreground truncate">{item.name}</span>
-                    {item.starred && <Star className="w-4 h-4 text-yellow-500 fill-current" />}
-                    {item.shared && <Share className="w-4 h-4 text-blue-500" />}
-                    <div className="flex gap-1">
-                      {item.tags?.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="col-span-2 flex items-center text-sm text-muted-foreground">
-                    {item.owner}
-                  </div>
-                  <div className="col-span-2 flex items-center text-sm text-muted-foreground">
-                    {item.modified}
-                  </div>
-                  <div className="col-span-2 flex items-center text-sm text-muted-foreground">
-                    {item.sizeFormatted || '-'}
-                  </div>
-                                     <div className="col-span-1 flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                     <DropdownMenu open={openDropdownId === item.id} onOpenChange={(open) => {
-                       console.log('Dropdown clicked:', item.id, open);
-                       setOpenDropdownId(open ? item.id : null);
-                     }}>
-                       <DropdownMenuTrigger asChild>
-                         <DHIS2Button secondary small className="h-8 w-8 p-0">
-                           <MoreVertical className="w-4 h-4" />
-                         </DHIS2Button>
-                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onItemAction('preview', item)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          Preview
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onItemAction('download', item)}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onItemAction('share', item)}>
-                          <Share className="mr-2 h-4 w-4" />
-                          Share
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onItemAction('star', item)}>
-                          <Star className="mr-2 h-4 w-4" />
-                          {item.starred ? 'Remove star' : 'Add star'}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onItemAction('metadata', item)}>
-                          <Tag className="mr-2 h-4 w-4" />
-                          Edit Metadata
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onItemAction('permissions', item)}>
-                          <Shield className="mr-2 h-4 w-4" />
-                          Access Control
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onItemAction('audit', item)}>
-                          <Clock className="mr-2 h-4 w-4" />
-                          View Audit Log
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onItemAction('delete', item)} className="text-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DataTable>
+            <DataTableHead>
+              <DataTableRow>
+                <DataTableColumnHeader>Name</DataTableColumnHeader>
+                <DataTableColumnHeader>Owner</DataTableColumnHeader>
+                <DataTableColumnHeader>Last modified</DataTableColumnHeader>
+                <DataTableColumnHeader>Size</DataTableColumnHeader>
+                <DataTableColumnHeader align="center">Actions</DataTableColumnHeader>
+              </DataTableRow>
+            </DataTableHead>
+            <DataTableBody>
+              {items.map((item) => {
+                const btnId = `menu-btn-list-${item.id}`
+                return (
+                  <DataTableRow key={item.id}>
+                    <DataTableCell>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {item.type === 'folder' ? <IconFolder24 /> : <IconFileDocument24 />}
+                        </span>
+                        <button
+                          type="button"
+                          style={{
+                            appearance: 'none',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: 0,
+                            margin: 0,
+                            color: 'var(--colors-grey900)',
+                            cursor: 'pointer',
+                            maxWidth: 280,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            fontWeight: 500,
+                          }}
+                          title={item.name}
+                          onClick={() => openItem(item)}
+                        >
+                          {item.name}
+                        </button>
+                        {item.starred && <span style={{ color: '#B58900', fontSize: 12 }}>★</span>}
+                        {item.shared && <span style={{ color: '#1E88E5', fontSize: 12 }}>⇢</span>}
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                          {item.tags?.slice(0, 2).map((tag) => (
+                            <Tag key={tag}>{tag}</Tag>
+                          ))}
+                          {item.tags && item.tags.length > 2 && (
+                            <Tag>+{item.tags.length - 2}</Tag>
+                          )}
+                        </div>
+                      </div>
+                    </DataTableCell>
+                    <DataTableCell>{item.owner}</DataTableCell>
+                    <DataTableCell>{item.modified}</DataTableCell>
+                    <DataTableCell>{item.sizeFormatted || '-'}</DataTableCell>
+                    <DataTableCell align="center">
+                      <Button
+                        id={btnId}
+                        small
+                        secondary
+                        onClick={() => openMenu(btnId, item)}
+                      >
+                        ⋮
+                      </Button>
+                    </DataTableCell>
+                  </DataTableRow>
+                )
+              })}
+            </DataTableBody>
+          </DataTable>
         </div>
 
-        {/* Preview Dialog */}
-        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+        {menuAnchor && (
+          <Popover reference={menuAnchor} onClickOutside={closeMenu} placement="bottom-end">
+            <Menu>
+              <MenuItem label="Preview" onClick={() => { if (menuItem) onItemAction('preview', menuItem); closeMenu(); }} />
+              <MenuItem label="Download" onClick={() => { if (menuItem) onItemAction('download', menuItem); closeMenu(); }} />
+              <MenuItem label="Share" onClick={() => { if (menuItem) onItemAction('share', menuItem); closeMenu(); }} />
+              <MenuItem label={menuItem?.starred ? 'Remove star' : 'Add star'} onClick={() => { if (menuItem) onItemAction('star', menuItem); closeMenu(); }} />
+              <MenuItem label="Edit Metadata" onClick={() => { if (menuItem) onItemAction('metadata', menuItem); closeMenu(); }} />
+              <MenuItem label="Access Control" onClick={() => { if (menuItem) onItemAction('permissions', menuItem); closeMenu(); }} />
+              <MenuItem label="View Audit Log" onClick={() => { if (menuItem) onItemAction('audit', menuItem); closeMenu(); }} />
+              <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />
+            </Menu>
+          </Popover>
+        )}
+
+        {previewOpen && (
+          <Modal onClose={() => setPreviewOpen(false)}>
+            <div style={{ padding: 16, maxWidth: 960, maxHeight: '80vh', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 600 }}>
                 {selectedItem && (
                   <>
-                    {(() => {
-                      const Icon = getFileIcon(selectedItem.type, selectedItem.fileType);
-                      return <Icon className={`w-5 h-5 ${getFileColor(selectedItem.type, selectedItem.fileType)}`} />;
-                    })()}
-                    {selectedItem.name}
+                    <span>{renderMainIcon(selectedItem.type, selectedItem.fileType)}</span>
+                    <span>{selectedItem.name}</span>
                   </>
                 )}
-              </DialogTitle>
-            </DialogHeader>
-            {selectedItem && (
-              <div className="flex gap-6">
-                <div className="flex-1">
-                  <div className="bg-muted/30 rounded-lg p-8 text-center">
-                    <FileText className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-sm text-muted-foreground">File preview will be displayed here</p>
-                  </div>
-                </div>
-                <div className="w-80 space-y-4">
-                  <div>
-                    <h3 className="font-semibold mb-2">Details</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Type:</span>
-                        <span>{selectedItem.fileType || 'Folder'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Size:</span>
-                        <span>{selectedItem.size || '-'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Owner:</span>
-                        <span>{selectedItem.owner}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Modified:</span>
-                        <span>{selectedItem.modified}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="font-semibold mb-2">Tags</h3>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedItem.tags?.map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          {tag}
-                        </Badge>
-                      )) || <span className="text-sm text-muted-foreground">No tags</span>}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold mb-2">Activity</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Opened 2 hours ago</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Edit className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Modified yesterday</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Share className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Shared last week</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <DHIS2Button primary small className="flex-1">
-                      <Download className="w-4 h-4 mr-2" />
-                      Download
-                    </DHIS2Button>
-                    <DHIS2Button secondary small className="flex-1">
-                      <Share className="w-4 h-4 mr-2" />
-                      Share
-                    </DHIS2Button>
-                  </div>
-                </div>
               </div>
-            )}
-          </DialogContent>
-        </Dialog>
+              {selectedItem && (
+                <div style={{ display: 'flex', gap: 24 }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="bg-muted/30 rounded-lg p-8 text-center">
+                      <div className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-sm text-muted-foreground">File preview will be displayed here</p>
+                    </div>
+                  </div>
+                  <div style={{ width: 320 }}>
+                    <div>
+                      <h3 className="font-semibold mb-2">Details</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Type:</span><span>{selectedItem.fileType || 'Folder'}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Size:</span><span>{selectedItem.size || '-'}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Owner:</span><span>{selectedItem.owner}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Modified:</span><span>{selectedItem.modified}</span></div>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <h3 className="font-semibold mb-2">Tags</h3>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedItem.tags?.map((tag) => (
+                          <Tag key={tag}>{tag}</Tag>
+                        )) || <span className="text-sm text-muted-foreground">No tags</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button primary onClick={() => onItemAction('download', selectedItem)}>Download</Button>
+                      <Button secondary onClick={() => onItemAction('share', selectedItem)}>Share</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        )}
       </>
-    );
+    )
   }
 
-  // Grid view
+  // GRID VIEW (unchanged)
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
         {items.map((item) => {
-          const Icon = getFileIcon(item.type, item.fileType);
-          const iconColor = getFileColor(item.type, item.fileType);
-          
+          const btnId = `menu-btn-grid-${item.id}`
           return (
-            <div
-              key={item.id}
-              className="group relative cursor-pointer"
-              onClick={() => handleItemClick(item)}
-            >
-              <DHIS2Card className="hover:shadow-md transition-all hover:border-drive-blue/30 h-32 w-full p-4">
-              <div className="flex flex-col items-center text-center space-y-2 h-full justify-center">
-                <div className="relative">
-                  <Icon className={`w-12 h-12 ${iconColor}`} />
-                  {item.starred && (
-                    <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-500 fill-current" />
-                  )}
-                  {item.shared && (
-                    <Share className="absolute -top-2 -left-2 w-4 h-4 text-blue-500" />
-                  )}
-                </div>
-                
-                <div className="w-full">
-                  <p className="font-medium text-sm text-foreground truncate" title={item.name}>
-                    {item.name}
-                  </p>
-                  {item.size && (
-                    <p className="text-xs text-muted-foreground">{item.size}</p>
-                  )}
-                </div>
+            <div key={item.id} className="group relative cursor-pointer" onClick={() => openItem(item)}>
+              <Card>
+                {/* Increase height to fit icon, name, size, and a reserved tags row */}
+                <div className="hover:shadow-md transition-all hover:border-drive-blue/30 h-40 w-full p-4">
+                  <div className="flex flex-col items-center text-center h-full justify-center">
+                    <div className="relative mb-2">
+                      {renderMainIcon(item.type, item.fileType)}
+                    </div>
 
-                {item.tags && item.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 justify-center">
-                    {item.tags.slice(0, 2).map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {item.tags.length > 2 && (
-                      <Badge variant="secondary" className="text-xs">
-                        +{item.tags.length - 2}
-                      </Badge>
-                    )}
+                    <div className="w-full">
+                      <p className="font-medium text-sm text-foreground truncate" title={item.name}>{item.name}</p>
+                      {item.size && (<p className="text-xs text-muted-foreground">{item.size}</p>)}
+                    </div>
+
+                    {/* Reserved single-row space for tags (same height whether present or not) */}
+                    <div className="mt-1 h-6 w-full flex items-center justify-center overflow-hidden">
+                      {item.tags && item.tags.length > 0 ? (
+                        <div className="flex items-center gap-1 overflow-hidden">
+                          {item.tags.slice(0, 2).map((tag) => (
+                            <Tag key={tag}>{tag}</Tag>
+                          ))}
+                          {item.tags.length > 2 && (
+                            <Tag>+{item.tags.length - 2}</Tag>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="sr-only">no tags</span>
+                      )}
+                    </div>
+
+                    {/* Star/Share markers anchored below icon so they don't shift layout */}
+                    <div className="absolute left-2 top-2 text-xs">
+                      {item.shared && (<span className="text-blue-600">⇢</span>)}
+                    </div>
+                    <div className="absolute right-2 top-2 text-xs">
+                      {item.starred && (<span className="text-yellow-600">★</span>)}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                 <DropdownMenu open={openDropdownId === item.id} onOpenChange={(open) => {
-                   console.log('Grid dropdown clicked:', item.id, open);
-                   setOpenDropdownId(open ? item.id : null);
-                 }}>
-                  <DropdownMenuTrigger asChild>
-                    <DHIS2Button secondary small className="h-6 w-6 p-0 bg-background/80 backdrop-blur-sm">
-                      <MoreVertical className="w-3 h-3" />
-                    </DHIS2Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onItemAction('preview', item);
-                    }}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      Preview
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onItemAction('download', item);
-                    }}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onItemAction('share', item);
-                    }}>
-                      <Share className="mr-2 h-4 w-4" />
-                      Share
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onItemAction('star', item);
-                    }}>
-                      <Star className="mr-2 h-4 w-4" />
-                      {item.starred ? 'Remove star' : 'Add star'}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onItemAction('metadata', item);
-                    }}>
-                      <Tag className="mr-2 h-4 w-4" />
-                      Edit Metadata
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onItemAction('permissions', item);
-                    }}>
-                      <Shield className="mr-2 h-4 w-4" />
-                      Access Control
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      onItemAction('audit', item);
-                    }}>
-                      <Clock className="mr-2 h-4 w-4" />
-                      View Audit Log
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onItemAction('delete', item);
-                      }} 
-                      className="text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              </DHIS2Card>
+                  <div
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button id={btnId} small secondary onClick={() => openMenu(btnId, item)}>
+                      ⋮
+                    </Button>
+                  </div>
+                </div>
+              </Card>
             </div>
-          );
+          )
         })}
       </div>
 
-      {/* Preview Dialog */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedItem && (
-                <>
-                  {(() => {
-                    const Icon = getFileIcon(selectedItem.type, selectedItem.fileType);
-                    return <Icon className={`w-5 h-5 ${getFileColor(selectedItem.type, selectedItem.fileType)}`} />;
-                  })()}
-                  {selectedItem.name}
-                </>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedItem && (
-            <div className="flex gap-6">
-              <div className="flex-1">
-                <div className="bg-muted/30 rounded-lg p-8 text-center min-h-[400px] flex items-center justify-center">
-                  <div>
-                    <FileText className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-sm text-muted-foreground">File preview will be displayed here</p>
-                  </div>
-                </div>
-              </div>
-              <div className="w-80 space-y-4">
-                <div>
-                  <h3 className="font-semibold mb-2">Details</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Type:</span>
-                      <span>{selectedItem.fileType || 'Folder'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Size:</span>
-                      <span>{selectedItem.size || '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Owner:</span>
-                      <span>{selectedItem.owner}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Modified:</span>
-                      <span>{selectedItem.modified}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h3 className="font-semibold mb-2">Tags</h3>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedItem.tags?.map((tag) => (
-                      <Badge key={tag} variant="secondary">
-                        {tag}
-                      </Badge>
-                    )) || <span className="text-sm text-muted-foreground">No tags</span>}
-                  </div>
-                </div>
+      {menuAnchor && (
+        <Popover reference={menuAnchor} onClickOutside={closeMenu} placement="bottom-end">
+          <Menu>
+            <MenuItem label="Preview" onClick={() => { if (menuItem) onItemAction('preview', menuItem); closeMenu(); }} />
+            <MenuItem label="Download" onClick={() => { if (menuItem) onItemAction('download', menuItem); closeMenu(); }} />
+            <MenuItem label="Share" onClick={() => { if (menuItem) onItemAction('share', menuItem); closeMenu(); }} />
+            <MenuItem label={menuItem?.starred ? 'Remove star' : 'Add star'} onClick={() => { if (menuItem) onItemAction('star', menuItem); closeMenu(); }} />
+            <MenuItem label="Edit Metadata" onClick={() => { if (menuItem) onItemAction('metadata', menuItem); closeMenu(); }} />
+            <MenuItem label="Access Control" onClick={() => { if (menuItem) onItemAction('permissions', menuItem); closeMenu(); }} />
+            <MenuItem label="View Audit Log" onClick={() => { if (menuItem) onItemAction('audit', menuItem); closeMenu(); }} />
+            <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />
+          </Menu>
+        </Popover>
+      )}
 
-                <div>
-                  <h3 className="font-semibold mb-2">Activity</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Opened 2 hours ago</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Edit className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Modified yesterday</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Share className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">Shared last week</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <DHIS2Button primary small className="flex-1">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
-                  </DHIS2Button>
-                  <DHIS2Button secondary small className="flex-1">
-                    <Share className="w-4 h-4 mr-2" />
-                    Share
-                  </DHIS2Button>
-                </div>
-              </div>
+      {previewOpen && (
+        <Modal onClose={() => setPreviewOpen(false)}>
+          <div style={{ padding: 16, maxWidth: 960, maxHeight: '80vh', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 600 }}>
+              {selectedItem && (<><span>{renderMainIcon(selectedItem.type, selectedItem.fileType)}</span><span>{selectedItem.name}</span></>)}
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            {selectedItem && (
+              <div style={{ display: 'flex', gap: 24 }}>
+                <div style={{ flex: 1 }}>
+                  <div className="bg-muted/30 rounded-lg p-8 text-center min-h-[400px] flex items-center justify-center">
+                    <div>
+                      <div className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-sm text-muted-foreground">File preview will be displayed here</p>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ width: 320 }}>
+                  <div>
+                    <h3 className="font-semibold mb-2">Details</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span className="text-muted-foreground">Type:</span><span>{selectedItem.fileType || 'Folder'}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Size:</span><span>{selectedItem.size || '-'}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Owner:</span><span>{selectedItem.owner}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Modified:</span><span>{selectedItem.modified}</span></div>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <h3 className="font-semibold mb-2">Tags</h3>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedItem.tags?.map((tag) => (<Tag key={tag}>{tag}</Tag>)) || <span className="text-sm text-muted-foreground">No tags</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <Button primary onClick={() => onItemAction('download', selectedItem!)}>
+                      Download
+                    </Button>
+                    <Button secondary onClick={() => onItemAction('share', selectedItem!)}>
+                      Share
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </>
-  );
+  )
 }
