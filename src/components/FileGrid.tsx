@@ -1,19 +1,18 @@
 import { useState } from 'react'
-import { Button, Card, Modal, Menu, MenuItem, Popover, Tag, DataTable, DataTableHead, DataTableBody, DataTableRow, DataTableCell, DataTableColumnHeader } from '@dhis2/ui'
+import { Button, Card, Menu, MenuItem, Popover, Tag, DataTable, DataTableHead, DataTableBody, DataTableRow, DataTableCell, DataTableColumnHeader } from '@dhis2/ui'
 import { IconFolder24, IconFileDocument24 } from '@dhis2/ui-icons'
 import { FileItem } from '@/lib/types'
+import { formatDateTime } from '@/lib/utils'
 
 interface FileGridProps {
   items: FileItem[]
   viewMode: 'grid' | 'list'
   onItemClick: (item: FileItem) => void
   onItemAction: (action: string, item: FileItem) => void
+  folderChildCounts?: Record<string, number>
 }
 
-export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGridProps) {
-  const [selectedItem, setSelectedItem] = useState<FileItem | null>(null)
-  const [previewOpen, setPreviewOpen] = useState(false)
-
+export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChildCounts = {} }: FileGridProps) {
   // Single contextual menu using DHIS2 Popover + Menu
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
   const [menuItem, setMenuItem] = useState<FileItem | null>(null)
@@ -42,8 +41,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
 
   const openItem = (item: FileItem) => {
     if (item.type === 'file') {
-      setSelectedItem(item)
-      setPreviewOpen(true)
+      onItemAction('preview', item)
     } else {
       onItemClick(item)
     }
@@ -67,6 +65,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
             <DataTableBody>
               {items.map((item) => {
                 const btnId = `menu-btn-list-${item.id}`
+                const childCount = folderChildCounts[item.id] || 0
                 return (
                   <DataTableRow key={item.id}>
                     <DataTableCell>
@@ -95,6 +94,9 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                         >
                           {item.name}
                         </button>
+                        {item.type === 'folder' && (
+                          <Tag>{childCount} item{childCount === 1 ? '' : 's'}</Tag>
+                        )}
                         {item.starred && <span style={{ color: '#B58900', fontSize: 12 }}>★</span>}
                         {item.shared && <span style={{ color: '#1E88E5', fontSize: 12 }}>⇢</span>}
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
@@ -108,8 +110,8 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
                       </div>
                     </DataTableCell>
                     <DataTableCell>{item.owner}</DataTableCell>
-                    <DataTableCell>{item.modified}</DataTableCell>
-                    <DataTableCell>{item.sizeFormatted || '-'}</DataTableCell>
+                    <DataTableCell>{formatDateTime(item.modified)}</DataTableCell>
+                    <DataTableCell>{item.type === 'file' ? (item.sizeFormatted || '-') : `${childCount} item${childCount === 1 ? '' : 's'}`}</DataTableCell>
                     <DataTableCell align="center">
                       <Button
                         id={btnId}
@@ -141,54 +143,6 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
             </Menu>
           </Popover>
         )}
-
-        {previewOpen && (
-          <Modal onClose={() => setPreviewOpen(false)}>
-            <div style={{ padding: 16, maxWidth: 960, maxHeight: '80vh', overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 600 }}>
-                {selectedItem && (
-                  <>
-                    <span>{renderMainIcon(selectedItem.type, selectedItem.fileType)}</span>
-                    <span>{selectedItem.name}</span>
-                  </>
-                )}
-              </div>
-              {selectedItem && (
-                <div style={{ display: 'flex', gap: 24 }}>
-                  <div style={{ flex: 1 }}>
-                    <div className="bg-muted/30 rounded-lg p-8 text-center">
-                      <div className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-sm text-muted-foreground">File preview will be displayed here</p>
-                    </div>
-                  </div>
-                  <div style={{ width: 320 }}>
-                    <div>
-                      <h3 className="font-semibold mb-2">Details</h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-muted-foreground">Type:</span><span>{selectedItem.fileType || 'Folder'}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Size:</span><span>{selectedItem.size || '-'}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Owner:</span><span>{selectedItem.owner}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Modified:</span><span>{selectedItem.modified}</span></div>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <h3 className="font-semibold mb-2">Tags</h3>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedItem.tags?.map((tag) => (
-                          <Tag key={tag}>{tag}</Tag>
-                        )) || <span className="text-sm text-muted-foreground">No tags</span>}
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-4">
-                      <Button primary onClick={() => onItemAction('download', selectedItem)}>Download</Button>
-                      <Button secondary onClick={() => onItemAction('share', selectedItem)}>Share</Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Modal>
-        )}
       </>
     )
   }
@@ -199,6 +153,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
         {items.map((item) => {
           const btnId = `menu-btn-grid-${item.id}`
+          const childCount = folderChildCounts[item.id] || 0
           return (
             <div key={item.id} className="group relative cursor-pointer" onClick={() => openItem(item)}>
               <Card>
@@ -211,7 +166,13 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
 
                     <div className="w-full">
                       <p className="font-medium text-sm text-foreground truncate" title={item.name}>{item.name}</p>
-                      {item.size && (<p className="text-xs text-muted-foreground">{item.size}</p>)}
+                      <p className="text-xs text-muted-foreground">
+                        {item.type === 'folder' ? (
+                          `${childCount} item${childCount === 1 ? '' : 's'}`
+                        ) : (
+                          item.sizeFormatted || '-'
+                        )}
+                      </p>
                     </div>
 
                     {/* Reserved single-row space for tags (same height whether present or not) */}
@@ -268,53 +229,6 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction }: FileGri
             <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />
           </Menu>
         </Popover>
-      )}
-
-      {previewOpen && (
-        <Modal onClose={() => setPreviewOpen(false)}>
-          <div style={{ padding: 16, maxWidth: 960, maxHeight: '80vh', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 600 }}>
-              {selectedItem && (<><span>{renderMainIcon(selectedItem.type, selectedItem.fileType)}</span><span>{selectedItem.name}</span></>)}
-            </div>
-            {selectedItem && (
-              <div style={{ display: 'flex', gap: 24 }}>
-                <div style={{ flex: 1 }}>
-                  <div className="bg-muted/30 rounded-lg p-8 text-center min-h-[400px] flex items-center justify-center">
-                    <div>
-                      <div className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-sm text-muted-foreground">File preview will be displayed here</p>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ width: 320 }}>
-                  <div>
-                    <h3 className="font-semibold mb-2">Details</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Type:</span><span>{selectedItem.fileType || 'Folder'}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Size:</span><span>{selectedItem.size || '-'}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Owner:</span><span>{selectedItem.owner}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Modified:</span><span>{selectedItem.modified}</span></div>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <h3 className="font-semibold mb-2">Tags</h3>
-                    <div className="flex flex-wrap gap-1">
-                      {selectedItem.tags?.map((tag) => (<Tag key={tag}>{tag}</Tag>)) || <span className="text-sm text-muted-foreground">No tags</span>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <Button primary onClick={() => onItemAction('download', selectedItem!)}>
-                      Download
-                    </Button>
-                    <Button secondary onClick={() => onItemAction('share', selectedItem!)}>
-                      Share
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </Modal>
       )}
     </>
   )

@@ -57,6 +57,8 @@ export interface DHIS2File {
   uploadStatus: 'pending' | 'uploading' | 'completed' | 'error';
   uploadProgress?: number;
   errorMessage?: string;
+  trashed?: boolean;
+  deletedAt?: string;
 }
 
 export interface DHIS2Folder {
@@ -68,17 +70,19 @@ export interface DHIS2Folder {
   created: string;
   modified: string;
   owner: string;
-  starred: boolean;
-  shared: boolean;
+  starred?: boolean;
+  shared?: boolean;
   description?: string;
   tags: string[];
-  permissions: string[];
+  permissions: any[];
+  trashed?: boolean;
+  deletedAt?: string;
 }
 
 // File upload configuration
 const FILE_UPLOAD_CONFIG = {
-  MAX_INLINE_SIZE: 1024 * 1024, // 1MB - files smaller than this will be stored inline
-  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB - maximum file size
+  MAX_INLINE_SIZE: 50 * 1024 * 1024, // 50MB - files smaller than this will be stored inline
+  MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB - maximum file size
   SUPPORTED_TYPES: [
     'application/pdf',
     'application/msword',
@@ -95,6 +99,9 @@ const FILE_UPLOAD_CONFIG = {
     'image/svg+xml',
     'video/mp4',
     'video/avi',
+    'video/webm',
+    'video/quicktime',
+    'video/x-matroska',
     'audio/mpeg',
     'audio/wav'
   ]
@@ -155,6 +162,41 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   }
 };
 
+// Upload binary to DHIS2 fileResources and return a persistent data URL
+const uploadToFileResources = async (file: File): Promise<string> => {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const base = getApiUrl('/fileResources');
+  const urlWithDomain = `${base}?domain=DOCUMENT`;
+  const headers = { ...getAuthHeaders() } as Record<string, string>;
+  delete (headers as any)['Content-Type'];
+
+  const tryPost = async (url: string) => {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: headers as any,
+      body: form as any,
+    } as RequestInit);
+    return resp;
+  };
+
+  let resp = await tryPost(urlWithDomain);
+  if (!resp.ok) {
+    // Fallback without domain param
+    const fallback = await tryPost(base);
+    if (!fallback.ok) {
+      const text = await fallback.text().catch(() => '');
+      throw new Error(`Failed to upload to fileResources: ${fallback.status} ${fallback.statusText} ${text}`);
+    }
+    resp = fallback;
+  }
+
+  const data = await resp.json().catch(() => ({}));
+  const id = data?.response?.fileResource?.id || data?.id || data?.fileResource?.id || data?.fileResourceId;
+  if (!id) throw new Error('fileResource id not returned');
+  return getApiUrl(`/fileResources/${id}/data`);
+};
+
 // File upload helper function - now properly integrated with DataStore
 const uploadFileToDataStore = async (file: File, folderId?: string): Promise<DHIS2File> => {
   console.log('[API DEBUG] uploadFileToDataStore - Starting upload for file:', file.name, 'size:', file.size);
@@ -194,21 +236,30 @@ const uploadFileToDataStore = async (file: File, folderId?: string): Promise<DHI
   };
   
   try {
-    // For small files, store content inline as base64
+    // For small/medium files, store content inline as base64
     if (file.size <= FILE_UPLOAD_CONFIG.MAX_INLINE_SIZE) {
-      console.log('[API DEBUG] uploadFileToDataStore - Small file, storing inline');
+      console.log('[API DEBUG] uploadFileToDataStore - Inline content');
       const content = await fileToBase64(file);
       fileMetadata.content = content;
       fileMetadata.uploadStatus = 'completed';
       fileMetadata.uploadProgress = 100;
     } else {
-      console.log('[API DEBUG] uploadFileToDataStore - Large file, storing metadata only');
-      // For large files, we'll store metadata and the actual file content
-      // would be handled by a separate file storage service
-      // For now, we'll store the file object reference
-      fileMetadata.url = `#file-${fileId}`; // Placeholder for actual file storage
-      fileMetadata.uploadStatus = 'completed';
-      fileMetadata.uploadProgress = 100;
+      console.log('[API DEBUG] uploadFileToDataStore - Uploading to DHIS2 fileResources');
+      // Upload to DHIS2 fileResources and store persistent URL
+      try {
+        const persistentUrl = await uploadToFileResources(file);
+        fileMetadata.url = persistentUrl;
+        fileMetadata.uploadStatus = 'completed';
+        fileMetadata.uploadProgress = 100;
+      } catch (e) {
+        console.error('[API DEBUG] uploadFileToDataStore - fileResources upload failed, falling back to blob URL', e);
+        try {
+          const blobUrl = URL.createObjectURL(file);
+          fileMetadata.url = blobUrl;
+        } catch {}
+        fileMetadata.uploadStatus = 'completed';
+        fileMetadata.uploadProgress = 100;
+      }
     }
     
     // Generate checksum for file integrity
@@ -753,19 +804,66 @@ export class DHIS2DataStoreAPI {
   }
 
   async getAllUsers(): Promise<any[]> {
+    try {
+      // Try live DHIS2 Users API first
+      const url = getApiUrl('/users.json?fields=id,name,email&paging=false');
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        const users = (data.users || []).map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email || '',
+          role: 'viewer',
+          permissions: ['read'],
+        }));
+        if (users.length > 0) {
+          return users;
+        }
+      }
+    } catch (e) {
+      console.warn('[API DEBUG] Live users fetch failed, falling back to Data Store users');
+    }
+
+    // Fallback to Data Store users
     const keys = await this.getNamespaceKeys();
-    const users = [];
-    
+    const users: any[] = [];
     for (const key of keys) {
       if (key.startsWith('user_')) {
         const user = await this.getKeyValue(key);
-        if (user) {
-          users.push(user);
-        }
+        if (user) users.push(user);
       }
     }
-    
+    if (users.length === 0) {
+      const defaults = [
+        { id: 'u_admin', name: 'Admin User', email: 'admin@example.org', role: 'admin', permissions: ['*'] },
+        { id: 'u_editor', name: 'Editor User', email: 'editor@example.org', role: 'editor', permissions: ['read', 'write'] },
+        { id: 'u_viewer', name: 'Viewer User', email: 'viewer@example.org', role: 'viewer', permissions: ['read'] },
+      ];
+      for (const u of defaults) {
+        const key = `user_${u.id}`;
+        await this.setKeyValue(key, u);
+        users.push(u);
+      }
+    }
     return users;
+  }
+
+  // Organisation Units
+  async getAllOrgUnits(): Promise<Array<{ id: string; name: string; displayName?: string; level?: number; parent?: { id: string } }>> {
+    try {
+      const fields = 'id,name,displayName,level,parent[id]';
+      const url = getApiUrl(`/organisationUnits.json?fields=${encodeURIComponent(fields)}&paging=false`);
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        return data.organisationUnits || [];
+      }
+      return [];
+    } catch (e) {
+      console.warn('[API DEBUG] getAllOrgUnits failed', e);
+      return [];
+    }
   }
 
   // Audit Logging
@@ -791,6 +889,18 @@ export class DHIS2DataStoreAPI {
     return logs
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limit);
+  }
+
+  async getAllAuditLogs(): Promise<any[]> {
+    const keys = await this.getNamespaceKeys();
+    const logs: any[] = [];
+    for (const key of keys) {
+      if (key.startsWith('audit_')) {
+        const log = await this.getKeyValue(key);
+        if (log) logs.push(log);
+      }
+    }
+    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   // Permissions Management

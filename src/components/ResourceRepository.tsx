@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
-import { NoticeBox, Button, CircularLoader } from '@dhis2/ui'
+import { NoticeBox, Button, CircularLoader, Modal } from '@dhis2/ui'
 import { IconUpload24, IconFolder24 } from '@dhis2/ui-icons'
 import { DHIS2Card } from "@/components/ui/dhis2-components";
 // import { Header } from "./Header";
@@ -29,6 +29,8 @@ import {
   PreviewData 
 } from "@/lib/types";
 import { createDataStoreAPI, dataStoreAPI } from "@/lib/dhis2-api";
+import { ShareDialog } from './ShareDialog';
+import { getAuthHeaders } from "@/config/dhis2";
 
 export interface FileItem extends FileMetadata {
   parentId?: string;
@@ -267,7 +269,8 @@ export function ResourceRepository() {
     refreshPermissions,
     isLoading,
     hasError,
-    initializeData
+    initializeData,
+    moveToTrash,
   } = useDHIS2DataStore();
 
   // Test API connectivity on component mount
@@ -293,24 +296,56 @@ export function ResourceRepository() {
   console.log('Current Folder ID:', currentFolderId);
   console.log('Active Section:', activeSection);
 
+  // When section changes via Sidebar, reset folder scope appropriately
+  useEffect(() => {
+    if (activeSection === 'my-drive') {
+      // Stay in current folder if already inside; otherwise root
+      // No special reset needed here
+    } else {
+      // For non-folder sections, ignore currentFolderId to show items from anywhere
+      // Achieve by not relying on currentFolderId in filtering for these sections
+    }
+  }, [activeSection]);
+
   const filteredFiles = allFiles.filter(file => {
-    const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         file.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    // Filter by current folder location
-    const inCurrentFolder = currentFolderId ? file.parentId === currentFolderId : !file.parentId;
-    
+    const q = (searchFilters.query || '').trim().toLowerCase();
+    const matchesQuery = q.length === 0 ||
+      file.name.toLowerCase().includes(q) ||
+      (file.description || '').toLowerCase().includes(q) ||
+      (file.tags || []).some(tag => tag.toLowerCase().includes(q));
+
+    const matchesFileTypes = (searchFilters.fileTypes?.length || 0) === 0 || (searchFilters.fileTypes || []).includes(file.fileType || '');
+    const matchesTags = (searchFilters.tags?.length || 0) === 0 || (searchFilters.tags || []).some(tag => (file.tags || []).includes(tag));
+    const matchesOwners = (searchFilters.owners?.length || 0) === 0 || (searchFilters.owners || []).includes(file.owner);
+    const matchesStarred = !searchFilters.starred || file.starred === true;
+    const matchesShared = !searchFilters.shared || file.shared === true;
+
+    const startOk = !searchFilters.dateRange?.start || new Date(file.modified) >= new Date(searchFilters.dateRange.start);
+    const endOk = !searchFilters.dateRange?.end || new Date(file.modified) <= new Date(searchFilters.dateRange.end);
+    const matchesDate = startOk && endOk;
+
+    // Folder scope only applies in My Drive; other sections span all folders
+    const inCurrentFolder = activeSection === 'my-drive'
+      ? (currentFolderId ? file.parentId === currentFolderId : !file.parentId)
+      : true;
+
+    const passesFilters = matchesQuery && matchesFileTypes && matchesTags && matchesOwners && matchesStarred && matchesShared && matchesDate;
+
+    const nowTs = Date.now();
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const isRecent = nowTs - new Date(file.modified).getTime() <= THIRTY_DAYS_MS;
+
     switch (activeSection) {
       case 'shared':
-        return matchesSearch && file.shared; // show shared items from anywhere
+        return passesFilters && file.shared && !file.trashed;
       case 'starred':
-        return matchesSearch && file.starred; // show starred items from anywhere
+        return passesFilters && file.starred && !file.trashed;
       case 'recent':
-        return matchesSearch; // show recent from anywhere (demo)
+        return passesFilters && !file.trashed && isRecent;
       case 'trash':
-        return false; // No files in trash for demo
+        return passesFilters && file.trashed === true;
       default:
-        return matchesSearch && inCurrentFolder;
+        return passesFilters && inCurrentFolder && !file.trashed;
     }
   });
   
@@ -339,37 +374,66 @@ export function ResourceRepository() {
     switch (action) {
       case 'preview':
         if (item.type === 'file') {
-          const previewData: PreviewData = {
-            fileId: item.id,
-            fileName: item.name,
-            fileType: item.fileType || 'unknown',
-            mimeType: item.mimeType || 'application/octet-stream',
-            url: `/api/files/${item.id}/preview`,
-            thumbnail: item.thumbnail,
-            canEdit: true, // This would be determined by permissions
-          };
-          setPreviewFile(previewData);
-          setShowPreview(true);
-          
-          // Log the preview action
-          const auditLog: AuditLog = {
-            id: `log_${Date.now()}`,
-            fileId: item.id,
-            fileName: item.name,
-            action: 'view',
-            userId: 'current-user',
-            userName: 'Current User',
-            timestamp: new Date().toISOString(),
-            details: 'File previewed',
-          };
-          saveAuditLog(auditLog);
+          try {
+            // Fetch full file record to get inline content or a stored URL
+            const dhis2File = await dataStoreAPI.getFile(item.id);
+            let previewUrl = '';
+
+            if (dhis2File?.content) {
+              const mime = dhis2File.mimeType || item.mimeType || 'application/octet-stream';
+              previewUrl = `data:${mime};base64,${dhis2File.content}`;
+            } else if (dhis2File?.url && /^https?:|^data:|^blob:/.test(dhis2File.url) === true) {
+              previewUrl = dhis2File.url;
+            } else {
+              // As a last resort, try thumbnail for images
+              if (item.thumbnail) {
+                previewUrl = item.thumbnail;
+              }
+            }
+
+            if (!previewUrl) {
+              throw new Error('No previewable content found for this file');
+            }
+
+            const previewData: PreviewData = {
+              fileId: item.id,
+              fileName: item.name,
+              fileType: item.fileType || 'unknown',
+              mimeType: item.mimeType || 'application/octet-stream',
+              url: previewUrl,
+              thumbnail: item.thumbnail,
+              canEdit: true,
+            };
+            setPreviewFile(previewData);
+            setShowPreview(true);
+
+            const auditLog: AuditLog = {
+              id: `log_${Date.now()}`,
+              fileId: item.id,
+              fileName: item.name,
+              action: 'view',
+              userId: 'current-user',
+              userName: 'Current User',
+              timestamp: new Date().toISOString(),
+              details: 'File previewed',
+            };
+            saveAuditLog(auditLog);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to prepare preview';
+            alerts.critical(message);
+          }
         }
         break;
       case 'download':
-        alerts.info(`Downloading: ${item.name}`);
+        if (item.type === 'file') {
+          await handleFileDownload(item);
+        } else {
+          await handleFolderDownload(item);
+        }
         break;
       case 'share':
-        alerts.info(`Sharing: ${item.name}`);
+        setSelectedFile(item);
+        setShowShare(true);
         break;
       case 'star':
         await withBusy(async () => {
@@ -396,7 +460,9 @@ export function ResourceRepository() {
         });
         break;
       case 'delete':
-        alerts.warning(`Moved to trash: ${item.name}`);
+        // Show confirmation modal instead of immediate delete
+        setDeleteTarget(item);
+        setShowDeleteConfirm(true);
         break;
       case 'metadata':
         setSelectedFile(item);
@@ -413,6 +479,31 @@ export function ResourceRepository() {
       default:
         alerts.info(`Action ${action} on: ${item.name}`);
     }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    await withBusy(async () => {
+      const ok = await moveToTrash(deleteTarget);
+      if (ok) {
+        alerts.warning(`Moved to trash: ${deleteTarget.name}`);
+        const auditLog: AuditLog = {
+          id: `log_${Date.now()}`,
+          fileId: deleteTarget.id,
+          fileName: deleteTarget.name,
+          action: 'delete',
+          userId: 'current-user',
+          userName: 'Current User',
+          timestamp: new Date().toISOString(),
+          details: 'Item moved to trash',
+        };
+        saveAuditLog(auditLog);
+      } else {
+        alerts.critical(`Failed to move to trash: ${deleteTarget.name}`);
+      }
+    });
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
   };
 
   const handleBreadcrumbNavigate = (path: string) => {
@@ -632,10 +723,193 @@ export function ResourceRepository() {
     alerts.info('Edit mode activated');
   };
 
+  const [showShare, setShowShare] = useState(false);
+
+  // Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
+
+  const handleShareConfirm = async (perms: Permission[]) => {
+    try {
+      // merge existing + new (simple append for demo; you may fetch existing and merge by id)
+      const updated = [...dhis2Permissions, ...perms];
+      await savePermissions(updated);
+      const log: AuditLog = {
+        id: `log_${Date.now()}`,
+        fileId: perms[0]?.fileId || selectedFile?.id || '',
+        fileName: selectedFile?.name || perms[0]?.fileId || '',
+        action: 'share',
+        userId: 'current-user',
+        userName: 'Current User',
+        timestamp: new Date().toISOString(),
+        details: `Shared with ${perms.length} recipient(s)`
+      };
+      await saveAuditLog(log);
+      alerts.success('Shared successfully');
+    } catch (e) {
+      alerts.critical('Failed to share');
+    } finally {
+      setShowShare(false);
+      setSelectedFile(null);
+    }
+  };
+
   // Get available data for filters
   const availableTags = Array.from(new Set(allFiles.flatMap(f => f.tags || []))) as string[];
   const availableFileTypes = Array.from(new Set(allFiles.map(f => f.fileType).filter(Boolean))) as string[];
   const availableOwners = Array.from(new Set(allFiles.map(f => f.owner))) as string[];
+
+  const defaultSearchFilters: SearchFilters = {
+    query: '',
+    fileTypes: [],
+    tags: [],
+    dateRange: {},
+    owners: [],
+    starred: false,
+    shared: false,
+  };
+
+  // Clear filters on section change and reset folder scope for My Drive
+  useEffect(() => {
+    setSearchFilters(defaultSearchFilters);
+    if (activeSection === 'my-drive') {
+      setCurrentFolderId(null);
+    }
+  }, [activeSection]);
+
+  const triggerBrowserDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const base64ToBlob = (base64Data: string, contentType: string): Blob => {
+    const byteCharacters = atob(base64Data);
+    const byteArrays: Uint8Array[] = [];
+    const sliceSize = 1024;
+    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+      const slice = byteCharacters.slice(offset, offset + sliceSize);
+      const byteNumbers = new Array(slice.length);
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      byteArrays.push(byteArray);
+    }
+    return new Blob(byteArrays, { type: contentType });
+  };
+
+  const handleFileDownload = async (item: FileItem) => {
+    await withBusy(async () => {
+      try {
+        const rec = await dataStoreAPI.getFile(item.id);
+        const filename = item.name;
+        const mime = item.mimeType || rec?.mimeType || 'application/octet-stream';
+        if (rec?.content) {
+          const blob = base64ToBlob(rec.content, mime);
+          triggerBrowserDownload(blob, filename);
+        } else if (rec?.url && /^(https?:|data:|blob:)/i.test(rec.url)) {
+          try {
+            const headers = getAuthHeaders();
+            delete (headers as any)['Content-Type'];
+            const resp = await fetch(rec.url, { headers });
+            const blob = await resp.blob();
+            triggerBrowserDownload(blob, filename);
+          } catch {
+            const a = document.createElement('a');
+            a.href = rec.url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }
+        } else {
+          alerts.critical('No downloadable content found for this file');
+          return;
+        }
+        const log: AuditLog = {
+          id: `log_${Date.now()}`,
+          fileId: item.id,
+          fileName: item.name,
+          action: 'download',
+          userId: 'current-user',
+          userName: 'Current User',
+          timestamp: new Date().toISOString(),
+          details: 'File downloaded',
+        };
+        saveAuditLog(log);
+      } catch (e) {
+        alerts.critical('Failed to download file');
+      }
+    });
+  };
+
+  const collectDescendantFiles = (folderId: string): FileItem[] => {
+    const idToChildren = new Map<string, FileItem[]>();
+    for (const itm of allFiles) {
+      if (itm.parentId) {
+        const arr = idToChildren.get(itm.parentId) || [];
+        arr.push(itm);
+        idToChildren.set(itm.parentId, arr);
+      }
+    }
+    const result: FileItem[] = [];
+    const stack: string[] = [folderId];
+    while (stack.length) {
+      const id = stack.pop()!;
+      const children = idToChildren.get(id) || [];
+      for (const ch of children) {
+        if (ch.type === 'file') {
+          result.push(ch);
+        } else if (ch.type === 'folder') {
+          stack.push(ch.id);
+        }
+      }
+    }
+    return result;
+  };
+
+  // Build folder child counts (direct children only, excluding trashed)
+  const folderChildCounts: Record<string, number> = (() => {
+    const counts: Record<string, number> = {};
+    for (const item of allFiles) {
+      if (item.trashed) continue;
+      if (item.parentId) {
+        counts[item.parentId] = (counts[item.parentId] || 0) + 1;
+      }
+    }
+    return counts;
+  })();
+
+  const handleFolderDownload = async (folder: FileItem) => {
+    const files = collectDescendantFiles(folder.id);
+    if (files.length === 0) {
+      alerts.info('This folder has no files to download');
+      return;
+    }
+    alerts.info(`Starting download of ${files.length} file(s) from "${folder.name}"`);
+    // Download sequentially to avoid overwhelming browser
+    for (const f of files) {
+      await handleFileDownload(f);
+    }
+    alerts.success(`Completed downloads from "${folder.name}"`);
+  };
+
+  const now = Date.now();
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const counts = {
+    myDrive: allFiles.filter(f => !f.trashed && (f.parentId ? false : true)).length,
+    shared: allFiles.filter(f => f.shared && !f.trashed).length,
+    recent: allFiles.filter(f => !f.trashed && (now - new Date(f.modified).getTime() <= THIRTY_DAYS_MS)).length,
+    starred: allFiles.filter(f => f.starred && !f.trashed).length,
+    trash: allFiles.filter(f => f.trashed).length,
+  };
 
   return (
     <div className="h-screen bg-gradient-to-br from-background to-muted/20 flex flex-col">
@@ -661,6 +935,7 @@ export function ResourceRepository() {
           onNewFolderClick={handleNewFolderClick}
           onFileUploadClick={handleFileUploadClick}
           onFolderUploadClick={handleFolderUploadClick}
+          counts={counts}
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -681,7 +956,7 @@ export function ResourceRepository() {
           >
             {(busyCount > 0 || isLoading) && (
               <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/10" aria-busy="true">
-                <CircularLoader large />
+                <CircularLoader />
               </div>
             )}
             <div className="mb-6">
@@ -713,7 +988,7 @@ export function ResourceRepository() {
                 </div>
                 
                 {/* Debug buttons */}
-                <div className="flex gap-2">
+                {/* <div className="flex gap-2">
                   <button
                     onClick={() => withBusy(() => refreshFolders())}
                     className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -961,7 +1236,7 @@ export function ResourceRepository() {
                   >
                     Refresh All
                   </button>
-                </div>
+                </div> */}
                 
                 {/* Debug info display */}
                 <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
@@ -1030,6 +1305,7 @@ export function ResourceRepository() {
                 viewMode={viewMode}
                 onItemClick={handleItemClick}
                 onItemAction={handleItemAction}
+                folderChildCounts={folderChildCounts}
               />
             )}
             
@@ -1291,6 +1567,32 @@ export function ResourceRepository() {
         isOpen={showAuditLog}
         onClose={() => setShowAuditLog(false)}
       />
+
+      {selectedFile && (
+        <ShareDialog
+          fileId={selectedFile.id}
+          fileName={selectedFile.name}
+          users={dhis2Users}
+          isOpen={showShare}
+          onClose={() => { setShowShare(false); setSelectedFile(null); }}
+          onShare={handleShareConfirm}
+        />
+      )}
+
+      {showDeleteConfirm && deleteTarget && (
+        <Modal onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); }}>
+          <div style={{ padding: 20, minWidth: 420 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8, fontSize: 16, fontWeight: 600 }}>Delete item</h3>
+            <p style={{ margin: '8px 0 16px 0' }}>
+              Are you sure you want to delete "{deleteTarget.name}"?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <Button secondary onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); }}>Cancel</Button>
+              <Button primary onClick={confirmDelete}>Delete</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* API Status Indicator */}
       <APIStatus onStatusChange={(isConnected) => {

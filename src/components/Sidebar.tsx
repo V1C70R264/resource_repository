@@ -3,7 +3,6 @@ import {
   Button, 
   DropdownButton, 
   MenuItem, 
-  Card,
   Chip
 } from "@dhis2/ui";
 import { 
@@ -23,17 +22,18 @@ interface SidebarProps {
   onNewFolderClick?: () => void;
   onFileUploadClick?: () => void;
   onFolderUploadClick?: () => void;
+  counts?: { myDrive: number; shared: number; recent: number; starred: number; trash: number };
 }
 
-export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFileUploadClick, onFolderUploadClick }: SidebarProps) {
+export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFileUploadClick, onFolderUploadClick, counts }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const navigationItems = [
-    { id: 'my-drive', label: 'My Drive', icon: IconFileDocument24, count: 156 },
-    { id: 'shared', label: 'Shared Items', icon: IconShare24, count: 23 },
-    { id: 'recent', label: 'Recent', icon: IconClock24, count: 45 },
-    { id: 'starred', label: 'Starred', icon: IconStar24, count: 12 },
-    { id: 'trash', label: 'Trash', icon: IconArchive24, count: 8 },
+    { id: 'my-drive', label: 'My Drive', icon: IconFileDocument24, count: counts?.myDrive ?? 0 },
+    { id: 'shared', label: 'Shared Items', icon: IconShare24, count: counts?.shared ?? 0 },
+    { id: 'recent', label: 'Recent', icon: IconClock24, count: counts?.recent ?? 0 },
+    { id: 'starred', label: 'Starred', icon: IconStar24, count: counts?.starred ?? 0 },
+    { id: 'trash', label: 'Trash', icon: IconArchive24, count: counts?.trash ?? 0 },
   ];
 
   return (
@@ -82,82 +82,35 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
             const isActive = activeSection === item.id;
             
             return (
-              <li key={item.id} style={{ marginBottom: '4px' }}>
+              <li key={item.id} style={{ marginBottom: '6px' }}>
                 <Button
                   {...(isActive ? { primary: true } : { secondary: true })}
                   onClick={() => onSectionChange(item.id)}
                   style={{
                     width: '100%',
                     justifyContent: 'flex-start',
-                    gap: '12px',
-                    height: '40px',
-                    padding: '0 12px',
-                    backgroundColor: isActive ? '#e3f2fd' : 'transparent',
-                    borderColor: isActive ? '#2196f3' : 'transparent'
+                    gap: '10px',
+                    padding: '0 10px',
                   }}
                 >
                   <Icon />
-                  <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
-                  {item.count > 0 && (
-                    <Chip>
-                      {item.count}
-                    </Chip>
-                  )}
+                  <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                  <div
+                    style={{
+                      transform: 'scale(0.85)',
+                      transformOrigin: 'right center',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Chip>{item.count}</Chip>
+                  </div>
                 </Button>
               </li>
             );
           })}
         </ul>
-
-        {/* Storage Usage Section - Commented out as per original */}
-        {/* 
-        <Card style={{ marginTop: '32px', padding: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '14px', fontWeight: 500 }}>Storage</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
-              {isExpanded ? (
-                <ChevronDown style={{ width: '12px', height: '12px' }} />
-              ) : (
-                <ChevronRight style={{ width: '12px', height: '12px' }} />
-              )}
-            </Button>
-          </div>
-          
-          {isExpanded && (
-            <>
-              <div style={{ height: '8px', backgroundColor: '#e1e5e9', borderRadius: '4px', marginBottom: '8px' }}>
-                <div style={{ width: '68%', height: '100%', backgroundColor: '#2196f3', borderRadius: '4px' }} />
-              </div>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span>6.8 GB of 10 GB used</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Documents</span>
-                    <span>4.2 GB</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Images</span>
-                    <span>1.8 GB</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Other</span>
-                    <span>0.8 GB</span>
-                  </div>
-                </div>
-              </div>
-              <Button secondary style={{ width: '100%', marginTop: '8px', height: '32px' }}>
-                Buy storage
-              </Button>
-            </>
-          )}
-        </Card>
-        */}
       </nav>
     </aside>
   );

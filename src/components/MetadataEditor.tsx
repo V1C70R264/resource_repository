@@ -1,22 +1,16 @@
-import { useState } from "react";
-import { Tag, Globe, FileText, Edit3, Save, X, Plus } from "lucide-react";
-import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { useEffect, useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Modal,
+  Button,
+  Tag as DHIS2Tag,
+  InputField,
+  TextAreaField,
+  SingleSelect,
+  SingleSelectOption
+} from "@dhis2/ui";
+import { IconEdit24, IconCheckmark24, IconAdd24, IconCross24 } from "@dhis2/ui-icons";
 import { FileMetadata } from "@/lib/types";
+import { formatDate } from "@/lib/utils";
 
 interface MetadataEditorProps {
   file: FileMetadata;
@@ -94,32 +88,48 @@ const suggestedTags = [
   "backup",
 ];
 
-export function MetadataEditor({
-  file,
-  isOpen,
-  onClose,
-  onSave,
-}: MetadataEditorProps) {
+export function MetadataEditor({ file, isOpen, onClose, onSave }: MetadataEditorProps) {
   const [metadata, setMetadata] = useState<FileMetadata>(file);
   const [newTag, setNewTag] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [titleError, setTitleError] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMetadata(file);
+      setNewTag("");
+      setIsEditing(false);
+      setTitleError(undefined);
+    }
+  }, [file, isOpen]);
 
   const handleSave = () => {
-    onSave(metadata);
+    if (!metadata.name || !metadata.name.trim()) {
+      setTitleError('Title is required');
+      return;
+    }
+
+    const updated: FileMetadata = {
+      ...metadata,
+      modified: new Date().toISOString(),
+    };
+
+    onSave(updated);
     setIsEditing(false);
   };
 
   const handleCancel = () => {
     setMetadata(file);
     setIsEditing(false);
+    setTitleError(undefined);
   };
 
   const addTag = (tag: string) => {
     const cleanTag = tag.trim().toLowerCase();
-    if (cleanTag && !metadata.tags.includes(cleanTag)) {
+    if (cleanTag && !(metadata.tags || []).includes(cleanTag)) {
       setMetadata({
         ...metadata,
-        tags: [...metadata.tags, cleanTag],
+        tags: [...(metadata.tags || []), cleanTag],
       });
     }
     setNewTag("");
@@ -128,242 +138,197 @@ export function MetadataEditor({
   const removeTag = (tagToRemove: string) => {
     setMetadata({
       ...metadata,
-      tags: metadata.tags.filter((tag) => tag !== tagToRemove),
+      tags: (metadata.tags || []).filter((tag) => tag !== tagToRemove),
     });
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addTag(newTag);
-    }
-  };
+  if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Edit3 className="w-5 h-5" />
-            Edit Metadata - {file.name}
-          </DialogTitle>
-        </DialogHeader>
+    <Modal onClose={onClose} large>
+      <div style={{ padding: 20, maxWidth: 920, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flex: '0 0 auto' }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: 16 }}>
+            <IconEdit24 />
+            <span>Edit metadata — {file.name}</span>
+          </div>
+          {!isEditing && (
+            <div>
+              <Button primary small onClick={() => setIsEditing(true)}>
+                <IconEdit24 /> Edit
+              </Button>
+            </div>
+          )}
+        </div>
 
-        <div className="space-y-6">
-          {/* Basic Information */}
-          <div className="space-y-4">
-            <h3 className="font-medium">Basic Information</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Language</label>
-                <Select
-                  value={metadata.language || ""}
-                  onValueChange={(value) =>
-                    setMetadata({ ...metadata, language: value })
-                  }
-                  disabled={!isEditing}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select language" />
-                  </SelectTrigger>
-                  <SelectContent>
+        {/* Scrollable body */}
+        <div style={{ flex: '1 1 auto', overflowY: 'auto' }}>
+          {/* Content layout: form on left (2/3), summary on right (1/3) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+            {/* Form column */}
+            <div>
+              {/* Title */}
+              <InputField
+                label="Title"
+                value={metadata.name}
+                onChange={({ value }) => { setMetadata({ ...metadata, name: value }); setTitleError(undefined); }}
+                disabled={!isEditing}
+                helpText="This is the display name shown in lists and search results."
+                validationText={titleError}
+                error={Boolean(titleError)}
+              />
+
+              {/* Language / Document type */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--colors-grey700)", marginBottom: 4 }}>Language</div>
+                  <SingleSelect
+                    selected={metadata.language || ""}
+                    onChange={({ selected }) => setMetadata({ ...metadata, language: selected })}
+                    disabled={!isEditing}
+                  >
+                    <SingleSelectOption label="Select language" value="" />
                     {languages.map((lang) => (
-                      <SelectItem key={lang.code} value={lang.code}>
-                        <div className="flex items-center gap-2">
-                          <Globe className="w-4 h-4" />
-                          {lang.name}
-                        </div>
-                      </SelectItem>
+                      <SingleSelectOption key={lang.code} label={lang.name} value={lang.code} />
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Document Type</label>
-                <Select
-                  value={metadata.documentType || ""}
-                  onValueChange={(value) =>
-                    setMetadata({ ...metadata, documentType: value })
-                  }
-                  disabled={!isEditing}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select document type" />
-                  </SelectTrigger>
-                  <SelectContent>
+                  </SingleSelect>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--colors-grey700)", marginBottom: 4 }}>Document type</div>
+                  <SingleSelect
+                    selected={metadata.documentType || ""}
+                    onChange={({ selected }) => setMetadata({ ...metadata, documentType: selected })}
+                    disabled={!isEditing}
+                  >
+                    <SingleSelectOption label="Select document type" value="" />
                     {documentTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4" />
-                          {type}
-                        </div>
-                      </SelectItem>
+                      <SingleSelectOption key={type} label={type} value={type} />
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Version</label>
-              <DHIS2Input
-                value={metadata.version || ""}
-                onChange={(e) =>
-                  setMetadata({ ...metadata, version: e.value })
-                }
-                placeholder="e.g., 1.0, 2.1.3"
-                disabled={!isEditing}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Description</label>
-              <Textarea
-                value={metadata.description || ""}
-                onChange={(e) =>
-                  setMetadata({ ...metadata, description: e.target.value })
-                }
-                placeholder="Enter a description of this file..."
-                rows={3}
-                disabled={!isEditing}
-              />
-            </div>
-          </div>
-
-          {/* Tags */}
-          <div className="space-y-4">
-            <h3 className="font-medium flex items-center gap-2">
-              <Tag className="w-4 h-4" />
-              Tags
-            </h3>
-
-            <div className="space-y-3">
-              {/* Current Tags */}
-              <div className="flex flex-wrap gap-2">
-                {metadata.tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="secondary"
-                    className="gap-1"
-                  >
-                    {tag}
-                    {isEditing && (
-                      <button
-                        onClick={() => removeTag(tag)}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </Badge>
-                ))}
-              </div>
-
-              {/* Add New Tag */}
-              {isEditing && (
-                <div className="flex gap-2">
-                  <DHIS2Input
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.value)}
-                    placeholder="Add a new tag..."
-                    className="flex-1"
-                  />
-                  <DHIS2Button
-                    onClick={() => addTag(newTag)}
-                    disabled={!newTag.trim()}
-                    small
-                  >
-                    <Plus className="w-4 h-4" />
-                  </DHIS2Button>
+                  </SingleSelect>
                 </div>
-              )}
+              </div>
 
-              {/* Suggested Tags */}
-              {isEditing && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Suggested Tags
-                  </label>
-                  <div className="flex flex-wrap gap-1">
-                    {suggestedTags
-                      .filter((tag) => !metadata.tags.includes(tag))
-                      .slice(0, 12)
-                      .map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant="outline"
-                          className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                          onClick={() => addTag(tag)}
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
+              {/* Version */}
+              <div style={{ marginTop: 12 }}>
+                <InputField
+                  label="Version"
+                  value={metadata.version || ""}
+                  onChange={({ value }) => setMetadata({ ...metadata, version: value })}
+                  placeholder="e.g., 1.0, 2.1.3"
+                  disabled={!isEditing}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginTop: 12 }}>
+                <TextAreaField
+                  label="Description"
+                  value={metadata.description || ""}
+                  onChange={({ value }) => setMetadata({ ...metadata, description: value })}
+                  rows={4}
+                  placeholder="Enter a description of this file..."
+                  disabled={!isEditing}
+                />
+              </div>
+
+              {/* Tags */}
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontWeight: 600 }}>
+                  <span>Tags</span>
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {(metadata.tags || []).map((tag) => (
+                    <div key={tag} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <DHIS2Tag>{tag}</DHIS2Tag>
+                      {isEditing && (
+                        <Button small secondary onClick={() => removeTag(tag)}>
+                          <IconCross24 />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {isEditing && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <InputField
+                      label="Add tag"
+                      value={newTag}
+                      onChange={({ value }) => setNewTag(value)}
+                      placeholder="Type a tag and click add"
+                    />
+                    <div style={{ display: "flex", alignItems: "flex-end" }}>
+                      <Button small primary onClick={() => addTag(newTag)} disabled={!newTag.trim()}>
+                        <IconAdd24 />
+                      </Button>
+                    </div>
                   </div>
+                )}
+
+                {isEditing && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 12, color: "var(--colors-grey700)", marginBottom: 6 }}>
+                      Suggested tags
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {suggestedTags
+                        .filter((t) => !(metadata.tags || []).includes(t))
+                        .slice(0, 12)
+                        .map((t) => (
+                          <Button key={t} small secondary onClick={() => addTag(t)}>
+                            {t}
+                          </Button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Summary column */}
+            <div style={{ borderLeft: '1px solid var(--colors-grey300)', paddingLeft: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, fontSize: 14 }}>
+                <div>
+                  <div style={{ color: "var(--colors-grey700)" }}>File name</div>
+                  <div style={{ fontWeight: 500 }}>{metadata.name}</div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* File Information (Read-only) */}
-          <div className="space-y-4">
-            <h3 className="font-medium">File Information</h3>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <label className="text-muted-foreground">File Name</label>
-                <p className="font-medium">{metadata.name}</p>
-              </div>
-              <div>
-                <label className="text-muted-foreground">File Type</label>
-                <p className="font-medium">{metadata.fileType || "Unknown"}</p>
-              </div>
-              <div>
-                <label className="text-muted-foreground">Size</label>
-                <p className="font-medium">{metadata.sizeFormatted || "Unknown"}</p>
-              </div>
-              <div>
-                <label className="text-muted-foreground">Modified</label>
-                <p className="font-medium">{metadata.modified}</p>
-              </div>
-              <div>
-                <label className="text-muted-foreground">Owner</label>
-                <p className="font-medium">{metadata.owner}</p>
-              </div>
-              <div>
-                <label className="text-muted-foreground">Created</label>
-                <p className="font-medium">{metadata.created}</p>
+                <div>
+                  <div style={{ color: "var(--colors-grey700)" }}>File type</div>
+                  <div style={{ fontWeight: 500 }}>{metadata.fileType || "Unknown"}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--colors-grey700)" }}>Size</div>
+                  <div style={{ fontWeight: 500 }}>{metadata.sizeFormatted || "Unknown"}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--colors-grey700)" }}>Modified</div>
+                  <div style={{ fontWeight: 500 }}>{formatDate(metadata.modified)}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--colors-grey700)" }}>Owner</div>
+                  <div style={{ fontWeight: 500 }}>{metadata.owner}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--colors-grey700)" }}>Created</div>
+                  <div style={{ fontWeight: 500 }}>{formatDate(metadata.created)}</div>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t">
-            {isEditing ? (
-              <>
-                <DHIS2Button secondary onClick={handleCancel}>
-                  Cancel
-                </DHIS2Button>
-                <DHIS2Button primary onClick={handleSave}>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </DHIS2Button>
-              </>
-            ) : (
-              <>
-                <DHIS2Button secondary onClick={onClose}>
-                  Close
-                </DHIS2Button>
-                <DHIS2Button primary onClick={() => setIsEditing(true)}>
-                  <Edit3 className="w-4 h-4 mr-2" />
-                  Edit Metadata
-                </DHIS2Button>
-              </>
-            )}
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Bottom action bar: shows only while editing */}
+        {isEditing && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, borderTop: '1px solid var(--colors-grey300)', paddingTop: 12, flex: '0 0 auto' }}>
+            <Button secondary onClick={handleCancel}>Cancel</Button>
+            <Button primary onClick={handleSave}>
+              <IconCheckmark24 /> Save changes
+            </Button>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 } 

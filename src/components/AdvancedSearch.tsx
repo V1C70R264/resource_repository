@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Button, Input, Checkbox, Chip } from "@dhis2/ui";
+import { Button, Input } from "@dhis2/ui";
 import { 
-  IconSearch24, 
   IconFilter24,
-  IconStar24,
-  IconShare24,
   IconList24,
   IconVisualizationColumn24
 } from "@dhis2/ui-icons";
@@ -79,47 +76,15 @@ export function AdvancedSearch({
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
       {/* Search Input */}
       <div style={{ position: 'relative', flex: 1, maxWidth: '448px', minWidth: 0, display: 'flex', alignItems: 'center' }}>
-        <div style={{ 
-          position: 'absolute', 
-          left: '8px', 
-          color: '#666',
-          pointerEvents: 'none',
-          zIndex: 10
-        }}>
-          {/* <IconSearch24 /> */}
-        </div>
-        <div style={{ position: 'relative', width: '100%' }}>
+        <div style={{ position: 'relative', width: '100%', display: 'flex', gap: 6 }}>
           <Input
             type="text"
-            placeholder="  Search files, folders, and content..."
+            placeholder="Search files, folders, and content..."
             value={filters.query}
             onChange={(e) => updateFilters({ query: e.value })}
           />
           {filters.query && (
-            <button
-              onClick={() => updateFilters({ query: "" })}
-              style={{
-                position: 'absolute',
-                right: '8px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                height: '20px',
-                width: '20px',
-                padding: 0,
-                background: 'none',
-                border: 'none',
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#666',
-                fontSize: '16px'
-              }}
-              type="button"
-            >
-              ×
-            </button>
+            <Button small secondary onClick={() => updateFilters({ query: "" })}>Clear</Button>
           )}
         </div>
       </div>
@@ -133,19 +98,6 @@ export function AdvancedSearch({
         >
           <IconFilter24 />
           Filters
-          {hasActiveFilters && (
-            <Chip>
-              {[
-                filters.fileTypes.length,
-                filters.tags.length,
-                filters.owners.length,
-                filters.starred ? 1 : 0,
-                filters.shared ? 1 : 0,
-                filters.dateRange.start ? 1 : 0,
-                filters.dateRange.end ? 1 : 0,
-              ].reduce((a, b) => a + b, 0)}
-            </Chip>
-          )}
         </Button>
         {isOpen && (
           <div style={{ 
@@ -165,189 +117,90 @@ export function AdvancedSearch({
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h4 style={{ fontWeight: '500', fontSize: '16px' }}>Search Filters</h4>
                 {hasActiveFilters && (
-                  <Button
-                    secondary
-                    onClick={clearFilters}
-                    style={{ fontSize: '14px', padding: '4px 8px' }}
-                  >
+                  <Button secondary onClick={clearFilters} style={{ fontSize: '14px', padding: '4px 8px' }}>
                     Clear All
                   </Button>
                 )}
               </div>
 
               {/* File Types */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
                 <label style={{ fontSize: '14px', fontWeight: '500' }}>File Types</label>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '8px', 
-                  maxHeight: '128px', 
-                  overflowY: 'auto' 
-                }}>
-                  {availableFileTypes.map((type) => (
-                    <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Checkbox
-                        checked={filters.fileTypes.includes(type)}
-                        onChange={(e) => {
-                          if (e.checked) {
-                            updateFilters({
-                              fileTypes: [...filters.fileTypes, type],
-                            });
-                          } else {
-                            updateFilters({
-                              fileTypes: filters.fileTypes.filter((t) => t !== type),
-                            });
-                          }
-                        }}
-                      />
-                      <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {availableFileTypes.map((type) => {
+                    const active = filters.fileTypes.includes(type);
+                    return (
+                      <Button key={type} small {...(active ? { primary: true } : { secondary: true })} onClick={() => {
+                        updateFilters({ fileTypes: active ? filters.fileTypes.filter(t => t !== type) : [...filters.fileTypes, type] });
+                      }}>
                         {type}
-                      </label>
-                    </div>
-                  ))}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Tags */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
                 <label style={{ fontSize: '14px', fontWeight: '500' }}>Tags</label>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '8px', 
-                  maxHeight: '128px', 
-                  overflowY: 'auto' 
-                }}>
-                  {availableTags.map((tag) => (
-                    <div key={tag} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Checkbox
-                        checked={filters.tags.includes(tag)}
-                        onChange={(e) => {
-                          if (e.checked) {
-                            updateFilters({
-                              tags: [...filters.tags, tag],
-                            });
-                          } else {
-                            updateFilters({
-                              tags: filters.tags.filter((t) => t !== tag),
-                            });
-                          }
-                        }}
-                      />
-                      <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {availableTags.map((tag) => {
+                    const active = filters.tags.includes(tag);
+                    return (
+                      <Button key={tag} small {...(active ? { primary: true } : { secondary: true })} onClick={() => {
+                        updateFilters({ tags: active ? filters.tags.filter(t => t !== tag) : [...filters.tags, tag] });
+                      }}>
                         {tag}
-                      </label>
-                    </div>
-                  ))}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Owners */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
                 <label style={{ fontSize: '14px', fontWeight: '500' }}>Owners</label>
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '8px', 
-                  maxHeight: '128px', 
-                  overflowY: 'auto' 
-                }}>
-                  {availableOwners.map((owner) => (
-                    <div key={owner} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Checkbox
-                        checked={filters.owners.includes(owner)}
-                        onChange={(e) => {
-                          if (e.checked) {
-                            updateFilters({
-                              owners: [...filters.owners, owner],
-                            });
-                          } else {
-                            updateFilters({
-                              owners: filters.owners.filter((o) => o !== owner),
-                            });
-                          }
-                        }}
-                      />
-                      <label style={{ fontSize: '14px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  {availableOwners.map((owner) => {
+                    const active = filters.owners.includes(owner);
+                    return (
+                      <Button key={owner} small {...(active ? { primary: true } : { secondary: true })} onClick={() => {
+                        updateFilters({ owners: active ? filters.owners.filter(o => o !== owner) : [...filters.owners, owner] });
+                      }}>
                         {owner}
-                      </label>
-                    </div>
-                  ))}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Date Range */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '14px', fontWeight: '500' }}>Date Range</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>From</label>
-                    <input
-                      type="date"
-                      value={filters.dateRange.start || ""}
-                      onChange={(e) =>
-                        updateFilters({
-                          dateRange: { ...filters.dateRange, start: e.target.value },
-                        })
-                      }
-                      style={{ 
-                        width: '100%', 
-                        padding: '8px', 
-                        fontSize: '14px', 
-                        border: '1px solid #e1e5e9', 
-                        borderRadius: '4px' 
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>To</label>
-                    <input
-                      type="date"
-                      value={filters.dateRange.end || ""}
-                      onChange={(e) =>
-                        updateFilters({
-                          dateRange: { ...filters.dateRange, end: e.target.value },
-                        })
-                      }
-                      style={{ 
-                        width: '100%', 
-                        padding: '8px', 
-                        fontSize: '14px', 
-                        border: '1px solid #e1e5e9', 
-                        borderRadius: '4px' 
-                      }}
-                    />
-                  </div>
+              {/* Date range */}
+              <div>
+                <label style={{ fontSize: '14px', fontWeight: '500' }}>Date range</label>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <Input
+                    type="date"
+                    value={filters.dateRange.start || ''}
+                    onChange={(e) => updateFilters({ dateRange: { ...filters.dateRange, start: e.value } })}
+                  />
+                  <Input
+                    type="date"
+                    value={filters.dateRange.end || ''}
+                    onChange={(e) => updateFilters({ dateRange: { ...filters.dateRange, end: e.value } })}
+                  />
                 </div>
               </div>
 
               {/* Quick Filters */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div>
                 <label style={{ fontSize: '14px', fontWeight: '500' }}>Quick Filters</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Checkbox
-                      checked={filters.starred}
-                      onChange={(e) =>
-                        updateFilters({ starred: e.checked })
-                      }
-                    />
-                    <label style={{ fontSize: '14px', cursor: 'pointer' }}>
-                      Starred
-                    </label>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Checkbox
-                      checked={filters.shared}
-                      onChange={(e) =>
-                        updateFilters({ shared: e.checked })
-                      }
-                    />
-                    <label style={{ fontSize: '14px', cursor: 'pointer' }}>
-                      Shared
-                    </label>
-                  </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                  <Button small {...(filters.starred ? { primary: true } : { secondary: true })} onClick={() => updateFilters({ starred: !filters.starred })}>
+                    Starred
+                  </Button>
+                  <Button small {...(filters.shared ? { primary: true } : { secondary: true })} onClick={() => updateFilters({ shared: !filters.shared })}>
+                    Shared
+                  </Button>
                 </div>
               </div>
             </div>
@@ -355,28 +208,13 @@ export function AdvancedSearch({
         )}
       </div>
 
-      {/* View Toggle - Only show if onViewModeChange is provided */}
+      {/* View Toggle */}
       {onViewModeChange && viewMode && (
-        <div style={{ 
-          display: 'flex', 
-          border: '1px solid #e1e5e9', 
-          borderRadius: '8px', 
-          padding: '4px', 
-          backgroundColor: '#f8f9fa',
-          marginLeft: '8px'
-        }}>
-          <Button
-            {...(viewMode === 'grid' ? { primary: true } : { secondary: true })}
-            onClick={() => onViewModeChange('grid')}
-            style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}
-          >
+        <div style={{ display: 'flex', border: '1px solid #e1e5e9', borderRadius: '8px', padding: '4px', backgroundColor: '#f8f9fa', marginLeft: '8px' }}>
+          <Button {...(viewMode === 'grid' ? { primary: true } : { secondary: true })} onClick={() => onViewModeChange('grid')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
             <IconVisualizationColumn24 />
           </Button>
-          <Button
-            {...(viewMode === 'list' ? { primary: true } : { secondary: true })}
-            onClick={() => onViewModeChange('list')}
-            style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}
-          >
+          <Button {...(viewMode === 'list' ? { primary: true } : { secondary: true })} onClick={() => onViewModeChange('list')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
             <IconList24 />
           </Button>
         </div>

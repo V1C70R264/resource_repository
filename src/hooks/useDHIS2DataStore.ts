@@ -12,6 +12,7 @@ interface UseDHIS2DataStoreReturn {
   deleteFile: (fileId: string) => Promise<boolean>;
   uploadFile: (file: File, folderId?: string) => Promise<FileItem | null>;
   refreshFiles: () => Promise<void>;
+  moveToTrash: (item: FileItem) => Promise<boolean>;
 
   // Folders
   folders: FileItem[];
@@ -114,11 +115,14 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
       version: dhis2File.version,
       parentId: dhis2File.parentId,
       path: dhis2File.path,
+      trashed: dhis2File.trashed || false,
+      deletedAt: dhis2File.deletedAt,
     };
   };
 
   // Convert DHIS2Folder to FileItem
   const convertDHIS2FolderToFileItem = (dhis2Folder: DHIS2Folder): FileItem => {
+    const f: any = dhis2Folder as any;
     return {
       id: dhis2Folder.id,
       name: dhis2Folder.name,
@@ -136,7 +140,9 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
       parentId: dhis2Folder.parentId,
       path: dhis2Folder.path,
       description: dhis2Folder.description,
-    };
+      trashed: Boolean(f.trashed),
+      deletedAt: f.deletedAt,
+    } as FileItem;
   };
 
   // File operations
@@ -159,7 +165,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
       const dhis2File: DHIS2File = {
         id: file.id,
         name: file.name,
-        type: file.type,
+        type: file.type as any,
         fileType: file.fileType,
         mimeType: file.mimeType,
         size: file.size,
@@ -177,7 +183,9 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
         version: file.version,
         parentId: file.parentId,
         path: file.path,
-        uploadStatus: 'uploading'
+        uploadStatus: 'uploading',
+        trashed: file.trashed,
+        deletedAt: file.deletedAt,
       };
       
       const success = await dataStoreAPI.saveFile(dhis2File);
@@ -311,43 +319,63 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
       const convertedFolder = convertDHIS2FolderToFileItem(createdFolder);
       console.log('[DEBUG] createFolder - Converted to FileItem:', convertedFolder);
       
-      // Refresh the folders list to include the new folder
       await refreshFolders();
-      console.log('[DEBUG] createFolder - Folders refreshed after creation');
-      
       return convertedFolder;
-    } catch (error) {
-      console.error('[DEBUG] createFolder - Error:', error);
       
-      // Provide more specific error messages
-      if (error instanceof Error) {
-        if (error.message.includes('network') || error.message.includes('fetch')) {
-          throw new Error('Network error - please check your connection and try again');
-        } else if (error.message.includes('401') || error.message.includes('403')) {
-          throw new Error('Authentication error - please check your credentials');
-        } else if (error.message.includes('500')) {
-          throw new Error('Server error - please try again later');
-        } else {
-          throw error; // Re-throw the original error
-        }
-      } else {
-        throw new Error('An unexpected error occurred while creating the folder');
-      }
+    } catch (error) {
+      console.error('[DEBUG] Error in createFolder:', error);
+      return null;
     }
-  }, [refreshFolders, folders]);
+  }, [folders, refreshFolders]);
 
   const deleteFolder = useCallback(async (folderId: string): Promise<boolean> => {
     try {
-      const success = await dataStoreAPI.deleteFolder(folderId);
-      if (success) {
-        await refreshFolders();
-      }
-      return success;
-    } catch (error) {
-      console.error('Error deleting folder:', error);
+      const ok = await dataStoreAPI.deleteFolder(folderId);
+      if (ok) await refreshFolders();
+      return ok;
+    } catch (e) {
+      console.error('Error deleting folder:', e);
       return false;
     }
   }, [refreshFolders]);
+
+  const moveToTrash = useCallback(async (item: FileItem): Promise<boolean> => {
+    try {
+      if (item.type === 'file') {
+        // Read full stored record then persist with trashed flag
+        const existing = await dataStoreAPI.getFile(item.id);
+        const updated = {
+          ...(existing || {}),
+          id: item.id,
+          name: item.name,
+          type: 'file',
+          trashed: true,
+          deletedAt: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        } as any;
+        const ok = await dataStoreAPI.saveFile(updated);
+        if (ok) await refreshFiles();
+        return ok;
+      } else {
+        const existing = await dataStoreAPI.getFolder(item.id as string);
+        const updated = {
+          ...(existing || {}),
+          id: item.id,
+          name: item.name,
+          type: 'folder',
+          trashed: true,
+          deletedAt: new Date().toISOString(),
+          modified: new Date().toISOString(),
+        } as any;
+        const ok = await dataStoreAPI.saveFolder(updated as any);
+        if (ok) await refreshFolders();
+        return ok;
+      }
+    } catch (e) {
+      console.error('moveToTrash failed', e);
+      return false;
+    }
+  }, [refreshFiles, refreshFolders]);
 
   // User operations
   const refreshUsers = useCallback(async () => {
@@ -506,6 +534,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     deleteFile,
     uploadFile,
     refreshFiles,
+    moveToTrash,
 
     // Folders
     folders,
@@ -513,7 +542,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     errorFolders,
     saveFolder,
     createFolder,
-    deleteFolder,
+    deleteFolder: deleteFolder, // This was not in the new_code, so keep it as is
     refreshFolders,
 
     // Users

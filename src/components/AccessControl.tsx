@@ -1,30 +1,15 @@
 import { useState } from "react";
-import { Shield, User, Users, Lock, Unlock, Plus, Trash2, Edit, Eye } from "lucide-react";
-import { DHIS2Button, DHIS2Input } from "@/components/ui/dhis2-components";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Permission, User as UserType } from "@/lib/types";
 import { format } from "date-fns";
+import {
+  Modal,
+  Button,
+  InputField,
+  SingleSelect,
+  SingleSelectOption,
+  Tag as DHIS2Tag,
+} from "@dhis2/ui";
+import { IconEdit24, IconAdd24, IconSettings24, IconCross24 } from "@dhis2/ui-icons";
+import { Permission, User as UserType } from "@/lib/types";
 
 interface AccessControlProps {
   fileId: string;
@@ -33,13 +18,13 @@ interface AccessControlProps {
   users: UserType[];
   isOpen: boolean;
   onClose: () => void;
-  onPermissionChange: (permission: Permission, action: 'add' | 'update' | 'remove') => void;
+  onPermissionChange: (permission: Permission & { groupId?: string; roleId?: string; orgUnitId?: string }, action: 'add' | 'update' | 'remove') => void;
 }
 
 const permissionTypes = [
-  { value: 'read', label: 'Can view', icon: Eye, color: 'bg-blue-100 text-blue-800' },
-  { value: 'write', label: 'Can edit', icon: Edit, color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'admin', label: 'Full access', icon: Shield, color: 'bg-red-100 text-red-800' },
+  { value: 'read', label: 'Can view' },
+  { value: 'write', label: 'Can edit' },
+  { value: 'admin', label: 'Full access' },
 ];
 
 export function AccessControlDialog({
@@ -51,26 +36,46 @@ export function AccessControlDialog({
   onClose,
   onPermissionChange,
 }: AccessControlProps) {
+  if (!isOpen) return null;
+
+  const safeFormatDate = (value?: string) => {
+    if (!value) return null;
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : format(d, 'MMM dd, yyyy');
+    };
+
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedPermission, setSelectedPermission] = useState("read");
   const [expiryDate, setExpiryDate] = useState("");
 
-  const handleAddPermission = () => {
-    if (!selectedUser) return;
+  // extra assignment dimensions
+  const [targetType, setTargetType] = useState<'user'|'group'|'role'|'orgUnit'>('user');
+  const [targetId, setTargetId] = useState("");
 
-    const newPermission: Permission = {
+  const handleAddPermission = () => {
+    if (!targetId) return;
+
+    const base: Permission & { groupId?: string; roleId?: string; orgUnitId?: string } = {
       id: `perm_${Date.now()}`,
       fileId,
-      userId: selectedUser,
+      fileName: fileName,
+      userId: targetType === 'user' ? targetId : '',
       type: selectedPermission as 'read' | 'write' | 'admin',
       grantedBy: "Current User",
       grantedAt: new Date().toISOString(),
       expiresAt: expiryDate || undefined,
-    };
+    } as any;
 
-    onPermissionChange(newPermission, 'add');
-    setSelectedUser("");
-    setSelectedPermission("read");
+    if (targetType === 'group') (base as any).groupId = targetId;
+    if (targetType === 'role') (base as any).roleId = targetId;
+    if (targetType === 'orgUnit') (base as any).orgUnitId = targetId;
+
+    onPermissionChange(base, 'add');
+
+    // reset
+    setTargetId("");
+    setTargetType('user');
+    setSelectedPermission('read');
     setExpiryDate("");
   };
 
@@ -81,169 +86,121 @@ export function AccessControlDialog({
     }
   };
 
-  const getPermissionUser = (userId: string) => {
-    return users.find(user => user.id === userId);
-  };
-
-  const getPermissionTypeInfo = (type: string) => {
-    return permissionTypes.find(pt => pt.value === type);
-  };
+  const getPermissionUser = (userId: string) => users.find(user => user.id === userId);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5" />
-            Access Control - {fileName}
-          </DialogTitle>
-        </DialogHeader>
+    <Modal onClose={onClose} large>
+      <div style={{ padding: 20, maxWidth: 880, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+            <IconSettings24 />
+            <span>Access control — {fileName}</span>
+          </div>
+        </div>
 
-        <div className="space-y-6">
+        {/* Scrollable content */}
+        <div style={{ flex: '1 1 auto', overflowY: 'auto' }}>
           {/* Add New Permission */}
-          <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-            <h3 className="font-medium flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Add Permission
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">User</label>
-                <Select value={selectedUser} onValueChange={setSelectedUser}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select user" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="w-6 h-6">
-                            <AvatarImage src={user.avatar} />
-                            <AvatarFallback className="text-xs">
-                              {user.name.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span>{user.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div style={{ border: '1px solid var(--colors-grey300)', borderRadius: 8, padding: 16, marginBottom: 16, background: 'var(--colors-grey050)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 12 }}>
+              <IconAdd24 />
+              <span>Add permission</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--colors-grey700)', marginBottom: 4 }}>Target type</div>
+                <SingleSelect selected={targetType} onChange={({ selected }) => setTargetType(selected as any)}>
+                  <SingleSelectOption label="User" value="user" />
+                  <SingleSelectOption label="Group" value="group" />
+                  <SingleSelectOption label="Role" value="role" />
+                  <SingleSelectOption label="Org unit" value="orgUnit" />
+                </SingleSelect>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Permission</label>
-                <Select value={selectedPermission} onValueChange={setSelectedPermission}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {permissionTypes.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        <div className="flex items-center gap-2">
-                          <type.icon className="w-4 h-4" />
-                          {type.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div>
+                <InputField
+                  label="Target ID"
+                  value={targetId}
+                  onChange={({ value }) => setTargetId(value)}
+                  placeholder="Enter user/group/role/orgUnit ID"
+                />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Expires (optional)</label>
-                <DHIS2Input
-                  type="date"
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--colors-grey700)', marginBottom: 4 }}>Permission</div>
+                <SingleSelect selected={selectedPermission} onChange={({ selected }) => setSelectedPermission(selected)}>
+                  {permissionTypes.map((type) => (
+                    <SingleSelectOption key={type.value} label={type.label} value={type.value} />
+                  ))}
+                </SingleSelect>
+              </div>
+
+              <div>
+                <InputField
+                  label="Expires (optional)"
                   value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.value)}
+                  onChange={({ value }) => setExpiryDate(value)}
+                  placeholder="YYYY-MM-DD"
                 />
               </div>
             </div>
 
-            <DHIS2Button primary onClick={handleAddPermission} disabled={!selectedUser}>
-              Add Permission
-            </DHIS2Button>
+            <div style={{ marginTop: 12 }}>
+              <Button primary disabled={!targetId} onClick={handleAddPermission}>
+                <IconAdd24 /> Add permission
+              </Button>
+            </div>
           </div>
 
           {/* Current Permissions */}
-          <div className="space-y-3">
-            <h3 className="font-medium flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              Current Permissions ({permissions.length})
-            </h3>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 8 }}>
+              <span>Current permissions ({permissions.length})</span>
+            </div>
 
             {permissions.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Lock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No specific permissions set</p>
-                <p className="text-sm">This file uses default permissions</p>
+              <div style={{ textAlign: 'center', color: 'var(--colors-grey700)', padding: '24px 0' }}>
+                <div style={{ fontSize: 14 }}>No specific permissions set</div>
+                <div style={{ fontSize: 12 }}>This resource uses default permissions</div>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div style={{ display: 'grid', gap: 8 }}>
                 {permissions.map((permission) => {
-                  const user = getPermissionUser(permission.userId);
-                  const typeInfo = getPermissionTypeInfo(permission.type);
-                  
-                  return (
-                    <div
-                      key={permission.id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="w-8 h-8">
-                          <AvatarImage src={user?.avatar} />
-                          <AvatarFallback className="text-xs">
-                            {user?.name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        
-                        <div className="flex-1">
-                          <div className="font-medium">{user?.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {user?.email}
-                          </div>
-                        </div>
+                  const user = permission.userId ? getPermissionUser(permission.userId) : undefined;
+                  const grantedAtLabel = safeFormatDate(permission.grantedAt);
+                  const expiresAtLabel = safeFormatDate(permission.expiresAt);
 
-                        <div className="flex items-center gap-2">
-                          {typeInfo && (
-                            <Badge variant="secondary" className={typeInfo.color}>
-                              <typeInfo.icon className="w-3 h-3 mr-1" />
-                              {typeInfo.label}
-                            </Badge>
-                          )}
+                  return (
+                    <div key={permission.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--colors-grey300)', borderRadius: 8, padding: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--colors-grey200)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600 }}>
+                          {user ? (user.name.split(' ').map(n => n[0]).join('').slice(0, 2)) : '—'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{user ? user.name : (permission as any).groupId || (permission as any).roleId || (permission as any).orgUnitId}</div>
+                          <div style={{ fontSize: 12, color: 'var(--colors-grey700)' }}>{user?.email || '—'}</div>
+                        </div>
+                        <div>
+                          <DHIS2Tag>{permissionTypes.find(p => p.value === permission.type)?.label || permission.type}</DHIS2Tag>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <div className="text-xs text-muted-foreground text-right">
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+                        <div style={{ fontSize: 12, color: 'var(--colors-grey700)', textAlign: 'right' }}>
                           <div>Granted by {permission.grantedBy}</div>
-                          <div>{format(new Date(permission.grantedAt), "MMM dd, yyyy")}</div>
-                          {permission.expiresAt && (
-                            <div className="text-orange-600">
-                              Expires {format(new Date(permission.expiresAt), "MMM dd, yyyy")}
-                            </div>
-                          )}
+                          {grantedAtLabel && <div>{grantedAtLabel}</div>}
+                          {expiresAtLabel && <div style={{ color: '#C05621' }}>Expires {expiresAtLabel}</div>}
                         </div>
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <DHIS2Button secondary small>
-                              <Edit className="w-4 h-4" />
-                            </DHIS2Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem>Edit Permission</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleRemovePermission(permission.id)}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Remove
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <Button secondary small>
+                            <IconEdit24 />
+                          </Button>
+                          <Button secondary small onClick={() => handleRemovePermission(permission.id)}>
+                            <IconCross24 />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -251,23 +208,13 @@ export function AccessControlDialog({
               </div>
             )}
           </div>
-
-          {/* Summary */}
-          <div className="flex items-center justify-between text-sm text-muted-foreground pt-4 border-t">
-            <div>
-              {permissions.length} specific permissions set
-            </div>
-            <div className="flex items-center gap-4">
-              {permissionTypes.map((type) => (
-                <div key={type.value} className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${type.color.replace('bg-', 'bg-').replace(' text-', '')}`}></div>
-                  <span className="text-xs">{type.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+          <Button secondary onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </Modal>
   );
 } 

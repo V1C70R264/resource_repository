@@ -19,6 +19,8 @@ export interface FileMetadata {
   version?: string;
   parentId?: string;
   path: string;
+  trashed?: boolean;
+  deletedAt?: string;
 }
 
 export interface FileItem extends FileMetadata {
@@ -51,12 +53,15 @@ export interface User {
 
 export interface Permission {
   id: string;
-  fileId: string;
+  fileId: string; // kept for backward compatibility when targetType === 'user'
   userId: string;
   type: 'read' | 'write' | 'admin';
   grantedBy: string;
   grantedAt: string;
   expiresAt?: string;
+  // New optional fields to support non-user targets
+  targetType?: 'user' | 'group' | 'role' | 'orgUnit';
+  targetId?: string;
 }
 
 export interface SearchFilters {
@@ -80,4 +85,14 @@ export interface PreviewData {
   url: string;
   thumbnail?: string;
   canEdit: boolean;
+}
+
+// Lightweight OrgUnit type for selection
+export interface OrgUnit {
+  id: string;
+  name: string;
+  displayName?: string;
+  code?: string;
+  level?: number;
+  parentId?: string;
 } 

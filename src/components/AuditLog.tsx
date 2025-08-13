@@ -1,50 +1,22 @@
 import { useState } from "react";
-import { Clock, Eye, Edit, Download, Share, Trash2, Plus, Move, Copy, Filter } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { DHIS2Input } from "@/components/ui/dhis2-components";
+  Modal,
+  Button,
+  InputField,
+  SingleSelect,
+  SingleSelectOption,
+  Tag as DHIS2Tag,
+} from "@dhis2/ui";
+import { IconClock24, IconDownload24 } from "@dhis2/ui-icons";
 import { AuditLog } from "@/lib/types";
-import { format } from "date-fns";
+import { dataStoreAPI } from "@/lib/dhis2-api";
+import { formatDateTime } from "@/lib/utils";
 
 interface AuditLogProps {
   logs: AuditLog[];
   isOpen: boolean;
   onClose: () => void;
 }
-
-const actionIcons = {
-  view: Eye,
-  edit: Edit,
-  download: Download,
-  share: Share,
-  delete: Trash2,
-  create: Plus,
-  move: Move,
-  copy: Copy,
-};
-
-const actionColors = {
-  view: "bg-blue-100 text-blue-800",
-  edit: "bg-yellow-100 text-yellow-800",
-  download: "bg-green-100 text-green-800",
-  share: "bg-purple-100 text-purple-800",
-  delete: "bg-red-100 text-red-800",
-  create: "bg-green-100 text-green-800",
-  move: "bg-orange-100 text-orange-800",
-  copy: "bg-indigo-100 text-indigo-800",
-};
 
 export function AuditLogDialog({ logs, isOpen, onClose }: AuditLogProps) {
   const [filter, setFilter] = useState("all");
@@ -57,134 +29,147 @@ export function AuditLogDialog({ logs, isOpen, onClose }: AuditLogProps) {
     return matchesFilter && matchesSearch;
   });
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Audit Log
-          </DialogTitle>
-        </DialogHeader>
+  if (!isOpen) return null;
 
-        <div className="space-y-4">
+  const escapeCsv = (value: string) => String(value).replace(/"/g, '""');
+  const toCsv = (data: AuditLog[]) => {
+    const headers = [
+      'id','action','fileId','fileName','userId','userName','timestamp','details'
+    ];
+    const rows = data.map(l => [
+      l.id,
+      l.action,
+      l.fileId,
+      escapeCsv(l.fileName),
+      l.userId,
+      escapeCsv(l.userName),
+      formatDateTime(l.timestamp),
+      escapeCsv(l.details || '')
+    ]);
+    return [headers, ...rows]
+      .map(cols => cols.map(c => `"${String(c)}"`).join(','))
+      .join('\n');
+  };
+
+  const downloadCsv = (csv: string, name: string) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportFilteredCsv = () => {
+    downloadCsv(toCsv(filteredLogs), `audit_logs_filtered_${Date.now()}.csv`);
+  };
+
+  const exportAllCsv = async () => {
+    try {
+      const all = await dataStoreAPI.getAllAuditLogs();
+      downloadCsv(toCsv(all as any), `audit_logs_all_${Date.now()}.csv`);
+    } catch (e) {
+      // optional: show notice if needed
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} large>
+      <div style={{ padding: 20, maxWidth: 1040, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
+            <IconClock24 />
+            <span>Audit log</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button secondary small onClick={exportFilteredCsv}>
+              <IconDownload24 /> Export filtered
+            </Button>
+            <Button secondary small onClick={exportAllCsv}>
+              <IconDownload24 /> Export all
+            </Button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: '1 1 auto', overflowY: 'auto' }}>
           {/* Filters */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-muted-foreground" />
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Actions</SelectItem>
-                  <SelectItem value="view">View</SelectItem>
-                  <SelectItem value="edit">Edit</SelectItem>
-                  <SelectItem value="download">Download</SelectItem>
-                  <SelectItem value="share">Share</SelectItem>
-                  <SelectItem value="delete">Delete</SelectItem>
-                  <SelectItem value="create">Create</SelectItem>
-                  <SelectItem value="move">Move</SelectItem>
-                  <SelectItem value="copy">Copy</SelectItem>
-                </SelectContent>
-              </Select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <SingleSelect selected={filter} onChange={({ selected }) => setFilter(selected)}>
+              <SingleSelectOption label="All actions" value="all" />
+              <SingleSelectOption label="View" value="view" />
+              <SingleSelectOption label="Edit" value="edit" />
+              <SingleSelectOption label="Download" value="download" />
+              <SingleSelectOption label="Share" value="share" />
+              <SingleSelectOption label="Delete" value="delete" />
+              <SingleSelectOption label="Create" value="create" />
+              <SingleSelectOption label="Move" value="move" />
+              <SingleSelectOption label="Copy" value="copy" />
+            </SingleSelect>
+
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <InputField
+                label=""
+                value={searchQuery}
+                onChange={({ value }) => setSearchQuery(value)}
+                placeholder="Search files or users..."
+                name="audit-search"
+              />
             </div>
 
-            <DHIS2Input
-              placeholder="Search files or users..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.value)}
-              className="max-w-xs"
-            />
-
-            <Badge variant="secondary">
-              {filteredLogs.length} entries
-            </Badge>
+            <div style={{ marginLeft: 'auto' }}>
+              <DHIS2Tag>{filteredLogs.length} entries</DHIS2Tag>
+            </div>
           </div>
 
-          {/* Logs Table */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="bg-muted/50 px-4 py-2 border-b">
-              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground">
-                <div className="col-span-2">Action</div>
-                <div className="col-span-4">File</div>
-                <div className="col-span-2">User</div>
-                <div className="col-span-2">Date</div>
-                <div className="col-span-2">Details</div>
+          {/* Table header */}
+          <div style={{ border: '1px solid var(--colors-grey300)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ background: 'var(--colors-grey100)', padding: '8px 12px', borderBottom: '1px solid var(--colors-grey300)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr 1fr 1.5fr 2fr', gap: 12, fontSize: 12, color: 'var(--colors-grey700)', fontWeight: 600 }}>
+                <div>Action</div>
+                <div>File</div>
+                <div>User</div>
+                <div>Date</div>
+                <div>Details</div>
               </div>
             </div>
 
-            <div className="max-h-96 overflow-y-auto">
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
               {filteredLogs.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">
-                  No audit logs found
-                </div>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--colors-grey700)' }}>No audit logs found</div>
               ) : (
-                filteredLogs.map((log) => {
-                  const ActionIcon = actionIcons[log.action];
-                  return (
-                    <div
-                      key={log.id}
-                      className="px-4 py-3 border-b hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="grid grid-cols-12 gap-4 items-center">
-                        <div className="col-span-2">
-                          <div className="flex items-center gap-2">
-                            <ActionIcon className="w-4 h-4" />
-                            <Badge
-                              variant="secondary"
-                              className={actionColors[log.action]}
-                            >
-                              {log.action}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="col-span-4">
-                          <div className="font-medium truncate">{log.fileName}</div>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-sm">{log.userName}</div>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-sm text-muted-foreground">
-                            {format(new Date(log.timestamp), "MMM dd, yyyy HH:mm")}
-                          </div>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-sm text-muted-foreground truncate">
-                            {log.details || "-"}
-                          </div>
-                        </div>
+                filteredLogs.map((log) => (
+                  <div key={log.id} style={{ padding: '10px 12px', borderBottom: '1px solid var(--colors-grey200)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr 1fr 1.5fr 2fr', gap: 12, alignItems: 'center' }}>
+                      <div>
+                        <DHIS2Tag>{log.action}</DHIS2Tag>
                       </div>
+                      <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.fileName}</div>
+                      <div style={{ fontSize: 14 }}>{log.userName}</div>
+                      <div style={{ fontSize: 12, color: 'var(--colors-grey700)' }}>{formatDateTime(log.timestamp)}</div>
+                      <div style={{ fontSize: 12, color: 'var(--colors-grey700)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{log.details || '-'}</div>
                     </div>
-                  );
-                })
+                  </div>
+                ))
               )}
             </div>
           </div>
 
           {/* Summary */}
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div>
-              Showing {filteredLogs.length} of {logs.length} entries
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                <span>View</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                <span>Edit</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span>Download</span>
-              </div>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--colors-grey700)', fontSize: 12 }}>
+            <div>Showing {filteredLogs.length} of {logs.length} entries</div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+          <Button secondary onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </Modal>
   );
 } 
