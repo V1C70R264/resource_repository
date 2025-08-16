@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
 import { NoticeBox, Button, CircularLoader, Modal } from '@dhis2/ui'
 import { IconUpload24, IconFolder24 } from '@dhis2/ui-icons'
@@ -31,6 +31,7 @@ import {
 import { createDataStoreAPI, dataStoreAPI } from "@/lib/dhis2-api";
 import { ShareDialog } from './ShareDialog';
 import { getAuthHeaders } from "@/config/dhis2";
+import { DHIS2_CONFIG } from '@/config/dhis2';
 
 export interface FileItem extends FileMetadata {
   parentId?: string;
@@ -248,6 +249,11 @@ export function ResourceRepository() {
     }
   };
 
+  // Add state for selected items and double-tap tracking
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const lastTapRef = useRef<{ [id: string]: number }>({});
+  const [showCheckboxes, setShowCheckboxes] = useState<{ [id: string]: boolean }>({});
+
   // DHIS2 Data Store integration
   const {
     files: dhis2Files,
@@ -273,6 +279,9 @@ export function ResourceRepository() {
     moveToTrash,
   } = useDHIS2DataStore();
 
+  // Get current user id from config (or session)
+  const currentUserId = DHIS2_CONFIG.USERNAME;
+
   // Test API connectivity on component mount
   useEffect(() => {
     const testAPI = async () => {
@@ -295,6 +304,11 @@ export function ResourceRepository() {
   console.log('All Files:', allFiles);
   console.log('Current Folder ID:', currentFolderId);
   console.log('Active Section:', activeSection);
+
+  // Filter files for shared section based on permissions for current user
+  const sharedFileIds = dhis2Permissions
+    .filter(p => (p.userId === currentUserId || p.targetId === currentUserId) && (p.type === 'read' || p.type === 'write' || p.type === 'admin'))
+    .map(p => p.fileId);
 
   // When section changes via Sidebar, reset folder scope appropriately
   useEffect(() => {
@@ -337,7 +351,8 @@ export function ResourceRepository() {
 
     switch (activeSection) {
       case 'shared':
-        return passesFilters && file.shared && !file.trashed;
+        // Only show files/folders shared to the current user
+        return sharedFileIds.includes(file.id) && !file.trashed;
       case 'starred':
         return passesFilters && file.starred && !file.trashed;
       case 'recent':
@@ -911,6 +926,41 @@ export function ResourceRepository() {
     trash: allFiles.filter(f => f.trashed).length,
   };
 
+  // Handler for item tap (single/double)
+  const handleItemTap = (item: FileItem) => {
+    const now = Date.now();
+    const lastTap = lastTapRef.current[item.id] || 0;
+    if (now - lastTap < 400) {
+      // Double tap detected
+      setShowCheckboxes(prev => ({ ...prev, [item.id]: true }));
+    } else {
+      // Single tap: open/preview as before
+      if (item.type === 'file') {
+        handleItemAction('preview', item);
+      } else {
+        handleItemClick(item);
+      }
+    }
+    lastTapRef.current[item.id] = now;
+  };
+
+  // Handler for checkbox change
+  const handleSelectChange = (item: FileItem, checked: boolean) => {
+    setSelectedItems(prev => {
+      let next;
+      if (checked) {
+        next = [...prev, item.id];
+      } else {
+        next = prev.filter(id => id !== item.id);
+      }
+      // If only one item was selected and now none, clear all checkboxes
+      if (next.length === 0) {
+        setShowCheckboxes({});
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="h-screen bg-gradient-to-br from-background to-muted/20 flex flex-col">
               {/* <Header />
@@ -935,7 +985,13 @@ export function ResourceRepository() {
           onNewFolderClick={handleNewFolderClick}
           onFileUploadClick={handleFileUploadClick}
           onFolderUploadClick={handleFolderUploadClick}
-          counts={counts}
+          counts={{
+            myDrive: allFiles.filter(f => !f.trashed && (!f.parentId || f.parentId === 'root')).length,
+            shared: sharedFileIds.length,
+            recent: allFiles.filter(f => !f.trashed && (Date.now() - new Date(f.modified).getTime() <= 30 * 24 * 60 * 60 * 1000)).length,
+            starred: allFiles.filter(f => f.starred && !f.trashed).length,
+            trash: allFiles.filter(f => f.trashed).length,
+          }}
         />
         
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -1253,7 +1309,15 @@ export function ResourceRepository() {
                     ? 'Trash is empty'
                     : searchQuery
                       ? 'No files found'
-                      : 'This folder is empty'
+                      : activeSection === 'starred'
+                        ? 'No starred items'
+                        : activeSection === 'shared'
+                          ? 'No shared items'
+                          : activeSection === 'recent'
+                            ? 'No recent items'
+                            : activeSection === 'myDrive' || activeSection === 'root' || !activeSection
+                              ? 'My Drive is empty'
+                              : 'This folder is empty'
                 }>
                   <div className="space-y-3">
                     <p>
@@ -1261,7 +1325,15 @@ export function ResourceRepository() {
                         ? 'Deleted items will appear here. You cannot upload to Trash.'
                         : searchQuery
                           ? `No files or folders match "${searchQuery}". Try adjusting your search terms.`
-                          : 'Get started by uploading files or creating folders.'}
+                          : activeSection === 'starred'
+                            ? 'No starred items yet. Star files or folders to quickly access them here.'
+                            : activeSection === 'shared'
+                              ? 'No files or folders have been shared with you yet.'
+                              : activeSection === 'recent'
+                                ? 'No recent files or folders. Recently accessed items will appear here.'
+                                : activeSection === 'myDrive' || activeSection === 'root' || !activeSection
+                                  ? 'Your drive is empty. Upload files or create folders to get started.'
+                                  : 'Get started by uploading files or creating folders.'}
                     </p>
                     {activeSection === 'trash' ? (
                       <div className="flex flex-wrap gap-8 items-center">
@@ -1274,26 +1346,22 @@ export function ResourceRepository() {
                       </div>
                     ) : (
                       !searchQuery && (
-                        <div className="flex flex-wrap gap-8 items-center">
-                          <Button primary onClick={handleFileUploadClick}>
-                            <span className="inline-flex items-center gap-2">
-                              <IconUpload24 />
-                              Upload files
-                            </span>
-                          </Button>
-                          <Button secondary onClick={handleNewFolderClick}>
-                            <span className="inline-flex items-center gap-2">
-                              <IconFolder24 />
-                              New folder
-                            </span>
-                          </Button>
-                          <Button secondary onClick={handleFolderUploadClick}>
-                            <span className="inline-flex items-center gap-2">
-                              <IconFolder24 />
-                              Upload folder
-                            </span>
-                          </Button>
-                        </div>
+                        (activeSection === 'myDrive' || activeSection === 'root' || !activeSection) ? (
+                          <div className="flex flex-wrap gap-8 items-center">
+                            <Button primary onClick={handleFileUploadClick}>
+                              <span className="inline-flex items-center gap-2">
+                                <IconUpload24 />
+                                Upload files
+                              </span>
+                            </Button>
+                            <Button secondary onClick={handleNewFolderClick}>
+                              <span className="inline-flex items-center gap-2">
+                                <IconFolder24 />
+                                New folder
+                              </span>
+                            </Button>
+                          </div>
+                        ) : null
                       )
                     )}
                   </div>
@@ -1306,6 +1374,10 @@ export function ResourceRepository() {
                 onItemClick={handleItemClick}
                 onItemAction={handleItemAction}
                 folderChildCounts={folderChildCounts}
+                selectedItems={selectedItems}
+                showCheckboxes={showCheckboxes}
+                onItemTap={handleItemTap}
+                onSelectChange={handleSelectChange}
               />
             )}
             

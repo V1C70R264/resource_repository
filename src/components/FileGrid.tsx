@@ -1,18 +1,22 @@
 import { useState } from 'react'
-import { Button, Card, Menu, MenuItem, Popover, Tag, DataTable, DataTableHead, DataTableBody, DataTableRow, DataTableCell, DataTableColumnHeader } from '@dhis2/ui'
-import { IconFolder24, IconFileDocument24 } from '@dhis2/ui-icons'
+import { Button, Card, Menu, MenuItem, Popover, Tag, DataTable, DataTableHead, DataTableBody, DataTableRow, DataTableCell, DataTableColumnHeader, Checkbox } from '@dhis2/ui'
+import { IconFolder24, IconFileDocument24, IconStarFilled16 } from '@dhis2/ui-icons'
 import { FileItem } from '@/lib/types'
 import { formatDateTime } from '@/lib/utils'
 
 interface FileGridProps {
-  items: FileItem[]
-  viewMode: 'grid' | 'list'
-  onItemClick: (item: FileItem) => void
-  onItemAction: (action: string, item: FileItem) => void
-  folderChildCounts?: Record<string, number>
+  items: FileItem[];
+  viewMode: 'grid' | 'list';
+  onItemClick: (item: FileItem) => void;
+  onItemAction: (action: string, item: FileItem) => void;
+  folderChildCounts?: Record<string, number>;
+  selectedItems?: string[];
+  showCheckboxes?: { [id: string]: boolean };
+  onItemTap?: (item: FileItem) => void;
+  onSelectChange?: (item: FileItem, checked: boolean) => void;
 }
 
-export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChildCounts = {} }: FileGridProps) {
+export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChildCounts = {}, selectedItems, showCheckboxes, onItemTap, onSelectChange }: FileGridProps) {
   // Single contextual menu using DHIS2 Popover + Menu
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
   const [menuItem, setMenuItem] = useState<FileItem | null>(null)
@@ -67,9 +71,16 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
                 const btnId = `menu-btn-list-${item.id}`
                 const childCount = folderChildCounts[item.id] || 0
                 return (
-                  <DataTableRow key={item.id}>
+                  <DataTableRow key={item.id} onClick={onItemTap ? () => onItemTap(item) : undefined}>
                     <DataTableCell>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        {showCheckboxes && showCheckboxes[item.id] && (
+                          <Checkbox
+                            checked={selectedItems?.includes(item.id) || false}
+                            onChange={({ checked }) => onSelectChange && onSelectChange(item, checked)}
+                            dense
+                          />
+                        )}
                         <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                           {item.type === 'folder' ? <IconFolder24 /> : <IconFileDocument24 />}
                         </span>
@@ -97,7 +108,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
                         {item.type === 'folder' && (
                           <Tag>{childCount} item{childCount === 1 ? '' : 's'}</Tag>
                         )}
-                        {item.starred && <span style={{ color: '#B58900', fontSize: 12 }}>★</span>}
+                        {item.starred && <span style={{ color: '#B58900', fontSize: 16, verticalAlign: 'middle' }}><IconStarFilled16 /></span>}
                         {item.shared && <span style={{ color: '#1E88E5', fontSize: 12 }}>⇢</span>}
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
                           {item.tags?.slice(0, 2).map((tag) => (
@@ -155,10 +166,19 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
           const btnId = `menu-btn-grid-${item.id}`
           const childCount = folderChildCounts[item.id] || 0
           return (
-            <div key={item.id} className="group relative cursor-pointer" onClick={() => openItem(item)}>
+            <div key={item.id} className="group relative cursor-pointer" onClick={onItemTap ? () => onItemTap(item) : undefined}>
               <Card>
                 {/* Increase height to fit icon, name, size, and a reserved tags row */}
                 <div className="hover:shadow-md transition-all hover:border-drive-blue/30 h-40 w-full p-4">
+                  {showCheckboxes && showCheckboxes[item.id] && (
+                    <div className="absolute left-2 bottom-2 z-10">
+                      <Checkbox
+                        checked={selectedItems?.includes(item.id) || false}
+                        onChange={({ checked }) => onSelectChange && onSelectChange(item, checked)}
+                        dense
+                      />
+                    </div>
+                  )}
                   <div className="flex flex-col items-center text-center h-full justify-center">
                     <div className="relative mb-2">
                       {renderMainIcon(item.type, item.fileType)}
@@ -193,10 +213,10 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
 
                     {/* Star/Share markers anchored below icon so they don't shift layout */}
                     <div className="absolute left-2 top-2 text-xs">
-                      {item.shared && (<span className="text-blue-600">⇢</span>)}
+                      {item.starred && (<span className="text-yellow-600"><IconStarFilled16 /></span>)}
                     </div>
                     <div className="absolute right-2 top-2 text-xs">
-                      {item.starred && (<span className="text-yellow-600">★</span>)}
+                      {item.shared && <span style={{ color: '#1E88E5', fontSize: 12 }}>⇢</span>}
                     </div>
                   </div>
 
