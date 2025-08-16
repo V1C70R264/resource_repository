@@ -3,6 +3,7 @@ import { Button, Card, Menu, MenuItem, Popover, Tag, DataTable, DataTableHead, D
 import { IconFolder24, IconFileDocument24, IconStarFilled16 } from '@dhis2/ui-icons'
 import { FileItem } from '@/lib/types'
 import { formatDateTime } from '@/lib/utils'
+import { DHIS2Card } from '@/components/ui/dhis2-components';
 
 interface FileGridProps {
   items: FileItem[];
@@ -71,7 +72,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
                 const btnId = `menu-btn-list-${item.id}`
                 const childCount = folderChildCounts[item.id] || 0
                 return (
-                  <DataTableRow key={item.id} onClick={onItemTap ? () => onItemTap(item) : undefined}>
+                  <DataTableRow key={item.id}>
                     <DataTableCell>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                         {showCheckboxes && showCheckboxes[item.id] && (
@@ -101,7 +102,10 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
                             fontWeight: 500,
                           }}
                           title={item.name}
-                          onClick={() => openItem(item)}
+                          onClick={() => {
+                            if (onItemTap) onItemTap(item);
+                            else openItem(item);
+                          }}
                         >
                           {item.name}
                         </button>
