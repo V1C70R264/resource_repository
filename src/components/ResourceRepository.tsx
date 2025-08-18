@@ -28,8 +28,7 @@ import {
 } from "@/lib/types";
 import { createDataStoreAPI, dataStoreAPI } from "@/lib/dhis2-api";
 import { ShareDialog } from './ShareDialog';
-import { getAuthHeaders } from "@/config/dhis2";
-import { DHIS2_CONFIG } from '@/config/dhis2';
+import { DHIS2_CONFIG, getApiUrl, getAuthHeaders } from '@/config/dhis2';
 
 export interface FileItem extends FileMetadata {
   parentId?: string;
@@ -340,7 +339,27 @@ export function ResourceRepository() {
   } = useDHIS2DataStore();
 
   // Get current user id from config (or session)
-  const currentUserId = DHIS2_CONFIG.USERNAME;
+  const [currentUser, setCurrentUser] = useState<{ id: string; groupIds: Set<string>; roleIds: Set<string>; orgUnitIds: Set<string> } | null>(null);
+  useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const url = getApiUrl('/me.json?fields=id,userGroups[id],userRoles[id],organisationUnits[id]&paging=false');
+        const res = await fetch(url, { headers: getAuthHeaders() });
+        if (res.ok) {
+          const me = await res.json();
+          const groupIds = new Set<string>((me.userGroups || []).map((g: any) => g.id));
+          const roleIds = new Set<string>((me.userRoles || []).map((r: any) => r.id));
+          const orgUnitIds = new Set<string>((me.organisationUnits || []).map((o: any) => o.id));
+          setCurrentUser({ id: me.id, groupIds, roleIds, orgUnitIds });
+        } else {
+          setCurrentUser(null);
+        }
+      } catch {
+        setCurrentUser(null);
+      }
+    };
+    fetchMe();
+  }, []);
 
   // Test API connectivity on component mount
   useEffect(() => {
@@ -367,7 +386,25 @@ export function ResourceRepository() {
 
   // Filter files for shared section based on permissions for current user
   const sharedFileIds = dhis2Permissions
-    .filter(p => (p.userId === currentUserId || p.targetId === currentUserId) && (p.type === 'read' || p.type === 'write' || p.type === 'admin'))
+    .filter(p => {
+      // ignore expired
+      if (p.expiresAt && new Date(p.expiresAt) < new Date()) return false;
+      // Allowed access types
+      if (!(p.type === 'read' || p.type === 'write' || p.type === 'admin')) return false;
+      // If /me not loaded, fallback to username matching legacy fields
+      if (!currentUser) {
+        const fallbackId = DHIS2_CONFIG.USERNAME;
+        return p.userId === fallbackId || p.targetId === fallbackId;
+      }
+      // Direct user match (legacy or explicit)
+      if (p.userId && p.userId === currentUser.id) return true;
+      if ((p.targetType === undefined || p.targetType === 'user') && p.targetId === currentUser.id) return true;
+      // Group/role/orgUnit membership
+      if (p.targetType === 'group' && p.targetId && currentUser.groupIds.has(p.targetId)) return true;
+      if (p.targetType === 'role' && p.targetId && currentUser.roleIds.has(p.targetId)) return true;
+      if (p.targetType === 'orgUnit' && p.targetId && currentUser.orgUnitIds.has(p.targetId)) return true;
+      return false;
+    })
     .map(p => p.fileId);
 
   // When section changes via Sidebar, reset folder scope appropriately
@@ -1283,10 +1320,10 @@ export function ResourceRepository() {
                     onClick={async () => {
                       try {
                         console.log('Testing simple API request...');
-                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/system/info', {
+                        const response = await fetch('https://play.dhis2.udsm.ac.tz/api/system/info', {
                           method: 'GET',
                           headers: {
-                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Authorization': 'Basic ' + btoa('student:Dhis2@2025'),
                             'Content-Type': 'application/json',
                           },
                         });
@@ -1311,10 +1348,10 @@ export function ResourceRepository() {
                     onClick={async () => {
                       try {
                         console.log('Testing data store endpoint...');
-                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository', {
+                        const response = await fetch('https://play.dhis2.udsm.ac.tz/api/dataStore/resource-repository', {
                           method: 'GET',
                           headers: {
-                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Authorization': 'Basic ' + btoa('student:Dhis2@2025'),
                             'Content-Type': 'application/json',
                           },
                         });
@@ -1342,10 +1379,10 @@ export function ResourceRepository() {
                       try {
                         console.log('Testing data store key creation...');
                         const testData = { test: true, timestamp: new Date().toISOString() };
-                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository/test-key', {
+                        const response = await fetch('https://play.dhis2.udsm.ac.tz/api/dataStore/resource-repository/test-key', {
                           method: 'POST',
                           headers: {
-                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Authorization': 'Basic ' + btoa('student:Dhis2@2025'),
                             'Content-Type': 'application/json',
                           },
                           body: JSON.stringify(testData),
@@ -1354,10 +1391,10 @@ export function ResourceRepository() {
                         if (response.ok) {
                            alerts.success('Key creation test successful');
                           // Clean up the test key
-                          await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository/test-key', {
+                          await fetch('https://play.dhis2.udsm.ac.tz/api/dataStore/resource-repository/test-key', {
                             method: 'DELETE',
                             headers: {
-                              'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                              'Authorization': 'Basic ' + btoa('student:Dhis2@2025'),
                             },
                           });
                         } else {
@@ -1378,10 +1415,10 @@ export function ResourceRepository() {
                     onClick={async () => {
                       try {
                         console.log('Testing settings endpoint...');
-                        const response = await fetch('https://upgrade.dhis2.udsm.ac.tz/api/dataStore/resource-repository/settings', {
+                        const response = await fetch('https://play.dhis2.udsm.ac.tz/api/dataStore/resource-repository/settings', {
                           method: 'GET',
                           headers: {
-                            'Authorization': 'Basic ' + btoa('josephwambura:Dhis@2025'),
+                            'Authorization': 'Basic ' + btoa('student:Dhis2@2025'),
                             'Content-Type': 'application/json',
                           },
                         });
@@ -1674,8 +1711,8 @@ export function ResourceRepository() {
               <div className="mt-2 text-xs">
                 <strong>Configuration:</strong>
                 <div className="mt-1 p-2 bg-background rounded">
-                  <div>Base URL: {import.meta.env.VITE_DHIS2_URL || 'https://upgrade.dhis2.udsm.ac.tz'}</div>
-                  <div>Username: {import.meta.env.VITE_DHIS2_USERNAME || 'josephwambura'}</div>
+                  <div>Base URL: {import.meta.env.VITE_DHIS2_URL || 'https://play.dhis2.udsm.ac.tz'}</div>
+                  <div>Username: {import.meta.env.VITE_DHIS2_USERNAME || 'student'}</div>
                   <div>Namespace: resource-repository</div>
                   <div>API Base: /api</div>
                 </div>

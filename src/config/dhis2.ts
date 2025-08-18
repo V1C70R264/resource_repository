@@ -3,11 +3,11 @@
 
 export const DHIS2_CONFIG = {
   // Base URL for your DHIS2 instance
-  BASE_URL: import.meta.env.VITE_DHIS2_URL || 'https://upgrade.dhis2.udsm.ac.tz',
+  BASE_URL: import.meta.env.VITE_DHIS2_URL || 'https://play.dhis2.udsm.ac.tz',
   
   // Authentication credentials
-  USERNAME: import.meta.env.VITE_DHIS2_USERNAME || 'josephwambura',
-  PASSWORD: import.meta.env.VITE_DHIS2_PASSWORD || 'Dhis@2025',
+  USERNAME: import.meta.env.VITE_DHIS2_USERNAME || 'student',
+  PASSWORD: import.meta.env.VITE_DHIS2_PASSWORD || 'Dhis2@2025',
   
   // API endpoints
   API_BASE: '/api',
@@ -39,6 +39,7 @@ export const getAuthHeaders = (): Record<string, string> => {
   const credentials = btoa(`${DHIS2_CONFIG.USERNAME}:${DHIS2_CONFIG.PASSWORD}`);
   const headers = {
     'Authorization': `Basic ${credentials}`,
+    'Accept': 'application/json',
     'Content-Type': 'application/json',
   };
   console.log('[CONFIG DEBUG] getAuthHeaders - Username:', DHIS2_CONFIG.USERNAME);
