@@ -1440,32 +1440,30 @@ export function ResourceRepository() {
                   activeSection === 'trash'
                     ? 'Trash is empty'
                     : searchQuery
-                      ? 'No files found'
+                      ? 'No results found'
                       : activeSection === 'starred'
                         ? 'No starred items'
                         : activeSection === 'shared'
                           ? 'No shared items'
                           : activeSection === 'recent'
                             ? 'No recent items'
-                            : activeSection === 'myDrive' || activeSection === 'root' || !activeSection
-                              ? 'My Drive is empty'
-                              : 'This folder is empty'
+                            : activeSection === 'my-drive'
+                              ? (currentFolderId ? 'Folder is empty' : 'My Drive is empty')
+                              : 'Folder is empty'
                 }>
                   <div className="space-y-3">
                     <p>
                       {activeSection === 'trash'
                         ? 'Deleted items will appear here. You cannot upload to Trash.'
                         : searchQuery
-                          ? `No files or folders match "${searchQuery}". Try adjusting your search terms.`
+                          ? `No results for "${searchQuery}".`
                           : activeSection === 'starred'
-                            ? 'No starred items yet. Star files or folders to quickly access them here.'
+                            ? 'Mark items as starred to surface them here for quick access.'
                             : activeSection === 'shared'
-                              ? 'No files or folders have been shared with you yet.'
+                              ? 'Items shared with you will appear here.'
                               : activeSection === 'recent'
-                                ? 'No recent files or folders. Recently accessed items will appear here.'
-                                : activeSection === 'myDrive' || activeSection === 'root' || !activeSection
-                                  ? 'Your drive is empty. Upload files or create folders to get started.'
-                                  : 'Get started by uploading files or creating folders.'}
+                                ? 'Your recently opened items will appear here.'
+                                : 'Get started by uploading files, uploading a folder, or creating a new folder.'}
                     </p>
                     {activeSection === 'trash' ? (
                       <div className="flex flex-wrap gap-8 items-center">
@@ -1477,23 +1475,27 @@ export function ResourceRepository() {
                         </Button>
                       </div>
                     ) : (
-                      !searchQuery && (
-                        (activeSection === 'myDrive' || activeSection === 'root' || !activeSection) ? (
-                          <div className="flex flex-wrap gap-8 items-center">
-                            <Button primary onClick={handleFileUploadClick}>
-                              <span className="inline-flex items-center gap-2">
-                                <IconUpload24 />
-                                Upload files
-                              </span>
-                            </Button>
-                            <Button secondary onClick={handleNewFolderClick}>
-                              <span className="inline-flex items-center gap-2">
-                                <IconFolder24 />
-                                New folder
-                              </span>
-                            </Button>
-                          </div>
-                        ) : null
+                      !searchQuery && activeSection === 'my-drive' && (
+                        <div className="flex flex-wrap gap-8 items-center">
+                          <Button primary onClick={handleFileUploadClick}>
+                            <span className="inline-flex items-center gap-2">
+                              <IconUpload24 />
+                              Upload files
+                            </span>
+                          </Button>
+                          <Button secondary onClick={handleFolderUploadClick}>
+                            <span className="inline-flex items-center gap-2">
+                              <IconFolder24 />
+                              Upload folder
+                            </span>
+                          </Button>
+                          <Button secondary onClick={handleNewFolderClick}>
+                            <span className="inline-flex items-center gap-2">
+                              <IconFolder24 />
+                              New folder
+                            </span>
+                          </Button>
+                        </div>
                       )
                     )}
                   </div>
