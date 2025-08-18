@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
 import { NoticeBox, Button, CircularLoader, Modal } from '@dhis2/ui'
-import { IconUpload24, IconFolder24 } from '@dhis2/ui-icons'
+import { IconUpload24, IconFolder24, IconChevronRight24 } from '@dhis2/ui-icons'
 import { DHIS2Card } from "@/components/ui/dhis2-components";
-// import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
-import { Breadcrumb } from "./Breadcrumb";
 import { FileGrid } from "./FileGrid";
 import { NewFolderDialog } from "./NewFolderDialog";
 import { FileUploadDialog } from "./FileUploadDialog";
@@ -253,6 +251,68 @@ export function ResourceRepository() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const lastTapRef = useRef<{ [id: string]: number }>({});
   const [showCheckboxes, setShowCheckboxes] = useState<{ [id: string]: boolean }>({});
+  // Double-tap handling: defer single action briefly to allow a second tap
+  const tapTimeoutRef = useRef<number | null>(null);
+  const tappedItemRef = useRef<string | null>(null);
+
+  // Selection actions
+  const clearSelection = () => {
+    setSelectedItems([]);
+    setShowCheckboxes({});
+  };
+
+  const addStarToSelected = async () => {
+    await withBusy(async () => {
+      let successCount = 0;
+      for (const id of selectedItems) {
+        const item = allFiles.find(f => f.id === id);
+        if (!item) continue;
+        const updated = { ...item, starred: true } as any;
+        const ok = item.type === 'file' ? await saveFile(updated) : await saveFolder(updated);
+        if (ok) successCount += 1;
+      }
+      if (successCount > 0) alerts.success(`Starred ${successCount} item${successCount > 1 ? 's' : ''}`);
+    });
+  };
+
+  const removeStarFromSelected = async () => {
+    await withBusy(async () => {
+      let successCount = 0;
+      for (const id of selectedItems) {
+        const item = allFiles.find(f => f.id === id);
+        if (!item) continue;
+        const updated = { ...item, starred: false } as any;
+        const ok = item.type === 'file' ? await saveFile(updated) : await saveFolder(updated);
+        if (ok) successCount += 1;
+      }
+      if (successCount > 0) alerts.success(`Removed star from ${successCount} item${successCount > 1 ? 's' : ''}`);
+    });
+  };
+
+  const downloadSelected = async () => {
+    await withBusy(async () => {
+      for (const id of selectedItems) {
+        const item = allFiles.find(f => f.id === id);
+        if (!item) continue;
+        if (item.type === 'file') await handleFileDownload(item);
+        else await handleFolderDownload(item);
+      }
+    });
+  };
+
+  const deleteSelected = async () => {
+    await withBusy(async () => {
+      let successCount = 0;
+      for (const id of selectedItems) {
+        const item = allFiles.find(f => f.id === id);
+        if (!item) continue;
+        const ok = await moveToTrash(item);
+        if (ok) successCount += 1;
+      }
+      if (successCount > 0) alerts.warning(`Moved ${successCount} item${successCount > 1 ? 's' : ''} to trash`);
+      clearSelection();
+    });
+  };
 
   // DHIS2 Data Store integration
   const {
@@ -928,20 +988,47 @@ export function ResourceRepository() {
 
   // Handler for item tap (single/double)
   const handleItemTap = (item: FileItem) => {
-    const now = Date.now();
-    const lastTap = lastTapRef.current[item.id] || 0;
-    if (now - lastTap < 400) {
-      // Double tap detected
-      setShowCheckboxes(prev => ({ ...prev, [item.id]: true }));
-    } else {
-      // Single tap: open/preview as before
-      if (item.type === 'file') {
-        handleItemAction('preview', item);
-      } else {
-        handleItemClick(item);
+    const thresholdMs = 350;
+
+    // if there's a pending single-tap on same item → treat as double-tap
+    if (tapTimeoutRef.current !== null && tappedItemRef.current === item.id) {
+      window.clearTimeout(tapTimeoutRef.current);
+      tapTimeoutRef.current = null;
+      tappedItemRef.current = null;
+
+      // Enable multi-select mode and select this item
+      const allVisible: { [id: string]: boolean } = {};
+      for (const it of filteredFiles) {
+        allVisible[it.id] = true;
       }
+      setShowCheckboxes(allVisible);
+      setSelectedItems(prev => (prev.includes(item.id) ? prev : [...prev, item.id]));
+      return;
     }
-    lastTapRef.current[item.id] = now;
+
+    // First tap: schedule single-tap action
+    tappedItemRef.current = item.id;
+    tapTimeoutRef.current = window.setTimeout(() => {
+      tapTimeoutRef.current = null;
+      tappedItemRef.current = null;
+
+      const inSelectionMode = Object.keys(showCheckboxes || {}).length > 0;
+      if (inSelectionMode) {
+        setShowCheckboxes(prev => ({ ...prev, [item.id]: true }));
+        setSelectedItems(prev => {
+          const isSelected = prev.includes(item.id);
+          const next = isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id];
+          if (next.length === 0) setShowCheckboxes({});
+          return next;
+        });
+      } else {
+        if (item.type === 'file') {
+          handleItemAction('preview', item);
+        } else {
+          handleItemClick(item);
+        }
+      }
+    }, thresholdMs);
   };
 
   // Handler for checkbox change
@@ -996,10 +1083,19 @@ export function ResourceRepository() {
         
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="p-6 border-b border-border bg-background/50 backdrop-blur-sm">
-            <Breadcrumb
-              items={breadcrumbs}
-              onNavigate={handleBreadcrumbNavigate}
-            />
+            <div className="flex items-center gap-1 text-sm">
+              <Button small secondary onClick={() => handleBreadcrumbNavigate('/')}>{breadcrumbs[0]?.name || 'My Drive'}</Button>
+              {breadcrumbs.slice(1).map((bc, index, arr) => (
+                <div key={bc.id} className="flex items-center gap-1">
+                  <IconChevronRight24 />
+                  {index === arr.length - 1 ? (
+                    <span>{bc.name}</span>
+                  ) : (
+                    <Button small secondary onClick={() => handleBreadcrumbNavigate(bc.path)}>{bc.name}</Button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
           
           <div 
@@ -1010,6 +1106,18 @@ export function ResourceRepository() {
             onDragLeave={handleMainAreaDragLeave}
             onDrop={handleMainAreaDrop}
           >
+            {selectedItems.length > 0 && (
+              <div className="sticky top-2 z-40 mb-4 flex justify-center">
+                <div className="inline-flex items-center gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 py-2 rounded border shadow-sm">
+                  <span className="text-sm mr-2">{selectedItems.length} selected</span>
+                  <Button small onClick={addStarToSelected}>Add star</Button>
+                  <Button small onClick={removeStarFromSelected}>Remove star</Button>
+                  <Button small onClick={downloadSelected}>Download</Button>
+                  <Button small destructive onClick={deleteSelected}>Delete</Button>
+                  <Button small secondary onClick={clearSelection}>Clear</Button>
+                </div>
+              </div>
+            )}
             {(busyCount > 0 || isLoading) && (
               <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/10" aria-busy="true">
                 <CircularLoader />

@@ -112,7 +112,11 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
                         {item.type === 'folder' && (
                           <Tag>{childCount} item{childCount === 1 ? '' : 's'}</Tag>
                         )}
-                        {item.starred && <span style={{ color: '#B58900', fontSize: 16, verticalAlign: 'middle' }}><IconStarFilled16 /></span>}
+                        {item.starred && (
+                          <span style={{ color: 'var(--colors-grey900)', fontSize: 16, verticalAlign: 'middle' }}>
+                            <IconStarFilled16 />
+                          </span>
+                        )}
                         {item.shared && <span style={{ color: '#1E88E5', fontSize: 12 }}>⇢</span>}
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'nowrap', overflow: 'hidden' }}>
                           {item.tags?.slice(0, 2).map((tag) => (
@@ -217,7 +221,11 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
 
                     {/* Star/Share markers anchored below icon so they don't shift layout */}
                     <div className="absolute left-2 top-2 text-xs">
-                      {item.starred && (<span className="text-yellow-600"><IconStarFilled16 /></span>)}
+                      {item.starred && (
+                        <span style={{ color: 'var(--colors-grey900)' }}>
+                          <IconStarFilled16 />
+                        </span>
+                      )}
                     </div>
                     <div className="absolute right-2 top-2 text-xs">
                       {item.shared && <span style={{ color: '#1E88E5', fontSize: 12 }}>⇢</span>}
