@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
 import { NoticeBox, Button, CircularLoader, Modal } from '@dhis2/ui'
-import { IconUpload24, IconFolder24, IconChevronRight24 } from '@dhis2/ui-icons'
+import { IconUpload24, IconFolder24, IconChevronRight16, IconHome24 } from '@dhis2/ui-icons'
 import { DHIS2Card } from "@/components/ui/dhis2-components";
 import { Sidebar } from "./Sidebar";
 import { FileGrid } from "./FileGrid";
@@ -1084,17 +1084,41 @@ export function ResourceRepository() {
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="p-6 border-b border-border bg-background/50 backdrop-blur-sm">
             <div className="flex items-center gap-1 text-sm">
-              <Button small secondary onClick={() => handleBreadcrumbNavigate('/')}>{breadcrumbs[0]?.name || 'My Drive'}</Button>
-              {breadcrumbs.slice(1).map((bc, index, arr) => (
-                <div key={bc.id} className="flex items-center gap-1">
-                  <IconChevronRight24 />
-                  {index === arr.length - 1 ? (
-                    <span>{bc.name}</span>
-                  ) : (
-                    <Button small secondary onClick={() => handleBreadcrumbNavigate(bc.path)}>{bc.name}</Button>
-                  )}
-                </div>
-              ))}
+              {/* Home icon button */}
+              <Button small secondary onClick={() => handleBreadcrumbNavigate('/')}> 
+                <span className="inline-flex items-center"><IconHome24 /></span>
+              </Button>
+              {activeSection === 'my-drive'
+                ? (
+                  <>
+                    {breadcrumbs.map((bc, index) => (
+                      <div key={bc.id} className="flex items-center gap-1">
+                        <span className="text-muted-foreground"><IconChevronRight16 /></span>
+                        <Button
+                          small
+                          secondary
+                          disabled={index === breadcrumbs.length - 1}
+                          onClick={index === breadcrumbs.length - 1 ? undefined : () => handleBreadcrumbNavigate(bc.path)}
+                        >
+                          {bc.name}
+                        </Button>
+                      </div>
+                    ))}
+                  </>
+                )
+                : (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className="text-muted-foreground"><IconChevronRight16 /></span>
+                      <Button small secondary disabled>
+                        {activeSection === 'shared' && 'Shared'}
+                        {activeSection === 'recent' && 'Recent'}
+                        {activeSection === 'starred' && 'Starred'}
+                        {activeSection === 'trash' && 'Trash'}
+                      </Button>
+                    </div>
+                  </>
+                )}
             </div>
           </div>
           
