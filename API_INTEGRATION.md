@@ -29,7 +29,7 @@ VITE_DHIS2_USERNAME=your-username
 VITE_DHIS2_PASSWORD=your-password
 
 # Optional: Custom namespace for data store
-VITE_DHIS2_DATASTORE_NAMESPACE=resource-repository
+VITE_DHIS2_DATASTORE_NAMESPACE=resource-repository-app
 
 # Optional: Enable debug logging
 VITE_DEBUG_MODE=false

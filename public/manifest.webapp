@@ -17,7 +17,7 @@
   "activities": {
     "dhis": {
       "href": "*",
-      "namespace": "resource-repository"
+      "namespace": "resource-repository-app"
     }
   }
 }

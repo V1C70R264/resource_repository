@@ -14,7 +14,7 @@ export const DHIS2_CONFIG = {
   DATA_STORE_ENDPOINT: '/dataStore',
   
   // Default namespace for the resource repository
-  DEFAULT_NAMESPACE: 'resource-repository',
+  DEFAULT_NAMESPACE: import.meta.env.VITE_DHIS2_DATASTORE_NAMESPACE || 'resource-repository-app',
   
   // Timeout settings
   REQUEST_TIMEOUT: 30000, // 30 seconds
