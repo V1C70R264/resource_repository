@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Upload, Clock, Shield, Tag } from "lucide-react";
 import { NoticeBox, Button, CircularLoader, Modal } from '@dhis2/ui'
 import { IconUpload24, IconFolder24, IconChevronRight16, IconHome24 } from '@dhis2/ui-icons'
@@ -364,8 +364,83 @@ export function ResourceRepository() {
   // Remove verbose API test logs in production
   // (no-op)
 
-  // Combine files and folders from DHIS2
-  const allFiles = [...dhis2Files, ...dhis2Folders];
+  // Load shared files owned by others (not in current user's own files)
+  const [externalSharedFiles, setExternalSharedFiles] = useState<FileItem[]>([]);
+
+  // Helper to convert DHIS2 file record to FileItem
+  const toFileItem = (rec: any): FileItem => ({
+    id: rec.id,
+    name: rec.name,
+    type: 'file',
+    fileType: rec.fileType,
+    mimeType: rec.mimeType,
+    size: rec.size,
+    sizeFormatted: rec.sizeFormatted,
+    modified: rec.modified,
+    created: rec.created,
+    owner: rec.owner,
+    starred: Boolean(rec.starred),
+    shared: Boolean(rec.shared),
+    thumbnail: rec.thumbnail,
+    tags: rec.tags || [],
+    language: rec.language,
+    documentType: rec.documentType,
+    description: rec.description,
+    version: rec.version,
+    parentId: rec.parentId,
+    path: rec.path,
+    trashed: Boolean(rec.trashed),
+    deletedAt: rec.deletedAt,
+  });
+
+  useEffect(() => {
+    const loadMissingShared = async () => {
+      // Distinct shared ids for this user
+      const distinctSharedIds = Array.from(new Set(dhis2Permissions
+        .filter(p => {
+          if (p.expiresAt && new Date(p.expiresAt) < new Date()) return false;
+          if (!(p.type === 'read' || p.type === 'write' || p.type === 'admin')) return false;
+          if (!currentUser) return false;
+          if (p.userId && p.userId === currentUser.id) return true;
+          if ((p.targetType === undefined || p.targetType === 'user') && p.targetId === currentUser.id) return true;
+          if (p.targetType === 'group' && p.targetId && currentUser.groupIds.has(p.targetId)) return true;
+          if (p.targetType === 'role' && p.targetId && currentUser.roleIds.has(p.targetId)) return true;
+          if (p.targetType === 'orgUnit' && p.targetId && currentUser.orgUnitIds.has(p.targetId)) return true;
+          return false;
+        })
+        .map(p => p.fileId)));
+      const presentIds = new Set<string>([...dhis2Files, ...dhis2Folders, ...externalSharedFiles].map(f => f.id));
+      const missingIds = distinctSharedIds.filter(id => !presentIds.has(id));
+      if (missingIds.length === 0) return;
+      try {
+        const fetched = await Promise.all(missingIds.map(async (id) => {
+          try {
+            const rec = await dataStoreAPI.getFile(id);
+            if (rec && !rec.trashed) return toFileItem(rec);
+          } catch {}
+          return null;
+        }));
+        const add = fetched.filter(Boolean) as FileItem[];
+        if (add.length > 0) {
+          setExternalSharedFiles(prev => {
+            const existing = new Map(prev.map(f => [f.id, f]));
+            for (const f of add) existing.set(f.id, f);
+            return Array.from(existing.values());
+          });
+        }
+      } catch {}
+    };
+    loadMissingShared();
+  }, [JSON.stringify(dhis2Permissions), currentUser, dhis2Files, dhis2Folders]);
+
+  // Combine files and folders from DHIS2 + externally shared items
+  const allFiles = useMemo(() => {
+    const map = new Map<string, FileItem>();
+    for (const f of dhis2Files) map.set(f.id, f);
+    for (const f of dhis2Folders) map.set(f.id, f);
+    for (const f of externalSharedFiles) map.set(f.id, f);
+    return Array.from(map.values());
+  }, [dhis2Files, dhis2Folders, externalSharedFiles]);
 
   // Removed verbose console logs
 
@@ -1103,7 +1178,7 @@ export function ResourceRepository() {
           onFolderUploadClick={handleFolderUploadClick}
           counts={{
             myDrive: allFiles.filter(f => !f.trashed && (!f.parentId || f.parentId === 'root')).length,
-            shared: sharedFileIds.length,
+            shared: Array.from(new Set(sharedFileIds)).length,
             recent: allFiles.filter(f => !f.trashed && (Date.now() - new Date(f.modified).getTime() <= 30 * 24 * 60 * 60 * 1000)).length,
             starred: allFiles.filter(f => f.starred && !f.trashed).length,
             trash: allFiles.filter(f => f.trashed).length,
