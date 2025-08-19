@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Modal, Button, InputField, SingleSelect, SingleSelectOption, Tag as DHIS2Tag, CircularLoader } from "@dhis2/ui";
+import { Modal, Button, InputField, SingleSelect, SingleSelectOption, Tag, CircularLoader } from "@dhis2/ui";
 import { IconShare24, IconAdd24, IconCross24 } from "@dhis2/ui-icons";
 import { Permission, User, OrgUnit } from "@/lib/types";
 import { useDHIS2Alerts } from "./DHIS2Alerts";
@@ -216,9 +216,9 @@ export function ShareDialog({ fileId, fileName, users: usersProp, isOpen, onClos
               {pending.map((p, idx) => (
                 <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--colors-grey200)', borderRadius: 6, padding: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <DHIS2Tag>{p.targetType}</DHIS2Tag>
+                    <Tag>{p.targetType}</Tag>
                     <div style={{ fontWeight: 600 }}>{p.targetId}</div>
-                    <div><DHIS2Tag>{p.permissionType}</DHIS2Tag></div>
+                    <div><Tag>{p.permissionType}</Tag></div>
                     {p.expiry && <div style={{ fontSize: 12, color: 'var(--colors-grey700)' }}>expires {p.expiry}</div>}
                   </div>
                   <Button small secondary onClick={() => removeRecipient(idx)}>

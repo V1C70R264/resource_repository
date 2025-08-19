@@ -18,6 +18,7 @@ interface FileGridProps {
 }
 
 export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChildCounts = {}, selectedItems, showCheckboxes, onItemTap, onSelectChange }: FileGridProps) {
+  const DHIS_BLUE_TINT = 'rgba(10, 110, 180, 0.08)'
   // Single contextual menu using DHIS2 Popover + Menu
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
   const [menuItem, setMenuItem] = useState<FileItem | null>(null)
@@ -71,16 +72,22 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
               {items.map((item) => {
                 const btnId = `menu-btn-list-${item.id}`
                 const childCount = folderChildCounts[item.id] || 0
+                const isSelected = selectedItems?.includes(item.id) || false
                 return (
-                  <DataTableRow key={item.id}>
+                  <DataTableRow key={item.id} selected={isSelected}>
                     <DataTableCell>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                         {showCheckboxes && showCheckboxes[item.id] && (
-                          <Checkbox
-                            checked={selectedItems?.includes(item.id) || false}
-                            onChange={({ checked }) => onSelectChange && onSelectChange(item, checked)}
-                            dense
-                          />
+                          <div
+                            onMouseDown={(e) => { e.stopPropagation(); }}
+                            onClick={(e) => { e.stopPropagation(); }}
+                          >
+                            <Checkbox
+                              checked={selectedItems?.includes(item.id) || false}
+                              onChange={({ checked }) => onSelectChange && onSelectChange(item, checked)}
+                              dense
+                            />
+                          </div>
                         )}
                         <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                           {item.type === 'folder' ? <IconFolder24 /> : <IconFileDocument24 />}
@@ -173,13 +180,18 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
         {items.map((item) => {
           const btnId = `menu-btn-grid-${item.id}`
           const childCount = folderChildCounts[item.id] || 0
+          const isSelected = selectedItems?.includes(item.id) || false
           return (
             <div key={item.id} className="group relative cursor-pointer" onClick={onItemTap ? () => onItemTap(item) : undefined}>
               <Card>
                 {/* Increase height to fit icon, name, size, and a reserved tags row */}
-                <div className="hover:shadow-md transition-all hover:border-drive-blue/30 h-40 w-full p-4">
+                <div className={`hover:shadow-md transition-all hover:border-drive-blue/30 h-40 w-full p-4 ${isSelected ? 'bg-[rgba(10,110,180,0.08)]' : ''}`}>
                   {showCheckboxes && showCheckboxes[item.id] && (
-                    <div className="absolute left-2 bottom-2 z-10">
+                    <div
+                      className="absolute left-2 bottom-2 z-10"
+                      onMouseDown={(e) => { e.stopPropagation(); }}
+                      onClick={(e) => { e.stopPropagation(); }}
+                    >
                       <Checkbox
                         checked={selectedItems?.includes(item.id) || false}
                         onChange={({ checked }) => onSelectChange && onSelectChange(item, checked)}

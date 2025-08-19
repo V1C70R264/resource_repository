@@ -110,6 +110,9 @@ const FILE_UPLOAD_CONFIG = {
 // API Configuration
 import { DHIS2_CONFIG, getApiUrl, getAuthHeaders } from '@/config/dhis2';
 
+// Upload progress callback type
+type UploadProgressCallback = (progressPercent: number, stage?: string) => void;
+
 // Authentication helper (now imported from config)
 
 // Generic API request helper
@@ -162,8 +165,8 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   }
 };
 
-// Upload binary to DHIS2 fileResources and return a persistent data URL
-const uploadToFileResources = async (file: File): Promise<string> => {
+// Upload binary to DHIS2 fileResources with progress and return a persistent data URL
+const uploadToFileResources = async (file: File, onProgress?: (pct: number) => void): Promise<string> => {
   const form = new FormData();
   form.append('file', file, file.name);
   const base = getApiUrl('/fileResources');
@@ -171,34 +174,48 @@ const uploadToFileResources = async (file: File): Promise<string> => {
   const headers = { ...getAuthHeaders() } as Record<string, string>;
   delete (headers as any)['Content-Type'];
 
-  const tryPost = async (url: string) => {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: headers as any,
-      body: form as any,
-    } as RequestInit);
-    return resp;
-  };
+  const xhrPost = (url: string) => new Promise<{ ok: boolean; status: number; statusText: string; json: any }>((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    // Set headers
+    Object.entries(headers).forEach(([k, v]) => {
+      try { xhr.setRequestHeader(k, v as string); } catch {}
+    });
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && onProgress) {
+        const pct = Math.round((evt.loaded / evt.total) * 100);
+        onProgress(pct);
+      }
+    };
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        const ok = xhr.status >= 200 && xhr.status < 300;
+        let json: any = {};
+        try { json = JSON.parse(xhr.responseText || '{}'); } catch {}
+        resolve({ ok, status: xhr.status, statusText: xhr.statusText, json });
+      }
+    };
+    xhr.send(form);
+  });
 
-  let resp = await tryPost(urlWithDomain);
+  let resp = await xhrPost(urlWithDomain);
   if (!resp.ok) {
     // Fallback without domain param
-    const fallback = await tryPost(base);
-    if (!fallback.ok) {
-      const text = await fallback.text().catch(() => '');
-      throw new Error(`Failed to upload to fileResources: ${fallback.status} ${fallback.statusText} ${text}`);
+    resp = await xhrPost(base);
+    if (!resp.ok) {
+      const text = (resp.json && typeof resp.json === 'object') ? JSON.stringify(resp.json) : '';
+      throw new Error(`Failed to upload to fileResources: ${resp.status} ${resp.statusText} ${text}`);
     }
-    resp = fallback;
   }
 
-  const data = await resp.json().catch(() => ({}));
+  const data = resp.json || {};
   const id = data?.response?.fileResource?.id || data?.id || data?.fileResource?.id || data?.fileResourceId;
   if (!id) throw new Error('fileResource id not returned');
   return getApiUrl(`/fileResources/${id}/data`);
 };
 
 // File upload helper function - now properly integrated with DataStore
-const uploadFileToDataStore = async (file: File, folderId?: string): Promise<DHIS2File> => {
+const uploadFileToDataStore = async (file: File, folderId?: string, onProgress?: UploadProgressCallback): Promise<DHIS2File> => {
   console.log('[API DEBUG] uploadFileToDataStore - Starting upload for file:', file.name, 'size:', file.size);
   
   // Validate file size
@@ -236,34 +253,49 @@ const uploadFileToDataStore = async (file: File, folderId?: string): Promise<DHI
   };
   
   try {
+    onProgress?.(0, 'Preparing');
     // For small/medium files, store content inline as base64
     if (file.size <= FILE_UPLOAD_CONFIG.MAX_INLINE_SIZE) {
       console.log('[API DEBUG] uploadFileToDataStore - Inline content');
-      const content = await fileToBase64(file);
+      const READ_WEIGHT = 70; // %
+      const CHECKSUM_WEIGHT = 10; // %
+      const BEFORE_SAVE_TOTAL = READ_WEIGHT + CHECKSUM_WEIGHT; // 80%
+      const content = await fileToBase64(file, (pct) => {
+        // Map read progress into READ_WEIGHT band
+        const overall = Math.min(READ_WEIGHT * (pct / 100), READ_WEIGHT);
+        onProgress?.(overall, 'Reading file');
+      });
       fileMetadata.content = content;
-      fileMetadata.uploadStatus = 'completed';
-      fileMetadata.uploadProgress = 100;
+      // Checksum stage
+      onProgress?.(READ_WEIGHT, 'Generating checksum');
+      fileMetadata.checksum = await generateFileChecksum(file);
+      onProgress?.(BEFORE_SAVE_TOTAL, 'Finalizing');
     } else {
       console.log('[API DEBUG] uploadFileToDataStore - Uploading to DHIS2 fileResources');
       // Upload to DHIS2 fileResources and store persistent URL
       try {
-        const persistentUrl = await uploadToFileResources(file);
+        const UPLOAD_WEIGHT = 75; // %
+        const CHECKSUM_WEIGHT = 10; // %
+        const BEFORE_SAVE_TOTAL = UPLOAD_WEIGHT + CHECKSUM_WEIGHT; // 85%
+        const persistentUrl = await uploadToFileResources(file, (pct) => {
+          const overall = Math.min(UPLOAD_WEIGHT * (pct / 100), UPLOAD_WEIGHT);
+          onProgress?.(overall, 'Uploading');
+        });
         fileMetadata.url = persistentUrl;
-        fileMetadata.uploadStatus = 'completed';
-        fileMetadata.uploadProgress = 100;
+        // Checksum stage
+        onProgress?.(UPLOAD_WEIGHT, 'Generating checksum');
+        fileMetadata.checksum = await generateFileChecksum(file);
+        onProgress?.(BEFORE_SAVE_TOTAL, 'Finalizing');
       } catch (e) {
         console.error('[API DEBUG] uploadFileToDataStore - fileResources upload failed, falling back to blob URL', e);
         try {
           const blobUrl = URL.createObjectURL(file);
           fileMetadata.url = blobUrl;
         } catch {}
-        fileMetadata.uploadStatus = 'completed';
-        fileMetadata.uploadProgress = 100;
+        // Even on fallback, mark progress as mostly complete before save
+        onProgress?.(85, 'Finalizing');
       }
     }
-    
-    // Generate checksum for file integrity
-    fileMetadata.checksum = await generateFileChecksum(file);
     
     console.log('[API DEBUG] uploadFileToDataStore - File metadata prepared:', fileMetadata);
     return fileMetadata;
@@ -277,14 +309,21 @@ const uploadFileToDataStore = async (file: File, folderId?: string): Promise<DHI
 };
 
 // Helper function to convert file to base64
-const fileToBase64 = (file: File): Promise<string> => {
+const fileToBase64 = (file: File, onProgress?: (pct: number) => void): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
+    reader.onprogress = (evt) => {
+      if (evt.lengthComputable && onProgress) {
+        const pct = Math.round((evt.loaded / evt.total) * 100);
+        onProgress(pct);
+      }
+    };
     reader.onload = () => {
       const result = reader.result as string;
       // Remove the data URL prefix (e.g., "data:application/pdf;base64,")
       const base64 = result.split(',')[1];
+      onProgress?.(100);
       resolve(base64);
     };
     reader.onerror = error => reject(error);
@@ -612,19 +651,24 @@ export class DHIS2DataStoreAPI {
   }
 
   // Updated uploadFile method - now properly integrated with DataStore
-  async uploadFile(file: File, folderId?: string): Promise<DHIS2File> {
+  async uploadFile(file: File, folderId?: string, onProgress?: UploadProgressCallback): Promise<DHIS2File> {
     try {
       console.log('[API DEBUG] uploadFile - Starting file upload:', file.name);
       
       // Process file and create metadata
-      const fileMetadata = await uploadFileToDataStore(file, folderId);
+      const fileMetadata = await uploadFileToDataStore(file, folderId, (pct, stage) => {
+        // This covers up to ~80-85%. Saving metadata will complete to 100% below.
+        onProgress?.(Math.min(Math.round(pct), 95), stage);
+      });
       
       // Save metadata to DataStore
+      onProgress?.(95, 'Saving metadata');
       const saveSuccess = await this.saveFile(fileMetadata);
       if (!saveSuccess) {
         throw new Error('Failed to save file metadata to DataStore');
       }
       
+      onProgress?.(100, 'Completed');
       console.log('[API DEBUG] uploadFile - File uploaded and metadata saved successfully');
       return fileMetadata;
       

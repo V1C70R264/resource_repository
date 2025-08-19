@@ -1010,25 +1010,22 @@ export function ResourceRepository() {
 
   // Handler for item tap (single/double)
   const handleItemTap = (item: FileItem) => {
-    const thresholdMs = 350;
+    const thresholdMs = 300;
 
-    // if there's a pending single-tap on same item → treat as double-tap
+    // If second tap on same item within threshold → enter multi-select mode
     if (tapTimeoutRef.current !== null && tappedItemRef.current === item.id) {
       window.clearTimeout(tapTimeoutRef.current);
       tapTimeoutRef.current = null;
       tappedItemRef.current = null;
 
-      // Enable multi-select mode and select this item
       const allVisible: { [id: string]: boolean } = {};
-      for (const it of filteredFiles) {
-        allVisible[it.id] = true;
-      }
+      for (const it of filteredFiles) allVisible[it.id] = true;
       setShowCheckboxes(allVisible);
       setSelectedItems(prev => (prev.includes(item.id) ? prev : [...prev, item.id]));
       return;
     }
 
-    // First tap: schedule single-tap action
+    // Schedule single-tap behavior
     tappedItemRef.current = item.id;
     tapTimeoutRef.current = window.setTimeout(() => {
       tapTimeoutRef.current = null;
@@ -1036,6 +1033,7 @@ export function ResourceRepository() {
 
       const inSelectionMode = Object.keys(showCheckboxes || {}).length > 0;
       if (inSelectionMode) {
+        // Toggle selection only, do not open
         setShowCheckboxes(prev => ({ ...prev, [item.id]: true }));
         setSelectedItems(prev => {
           const isSelected = prev.includes(item.id);
@@ -1044,6 +1042,7 @@ export function ResourceRepository() {
           return next;
         });
       } else {
+        // Normal single-click open
         if (item.type === 'file') {
           handleItemAction('preview', item);
         } else {

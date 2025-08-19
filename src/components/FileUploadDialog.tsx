@@ -14,6 +14,7 @@ interface FileUploadItem {
   file: File;
   status: 'pending' | 'uploading' | 'completed' | 'error';
   progress: number;
+  stage?: string;
   error?: string;
   uploadedFile?: any; // DHIS2File object after successful upload
 }
@@ -78,23 +79,18 @@ export function FileUploadDialog({
     try {
       // Update status to uploading
       setUploadFiles(prev => prev.map(f => 
-        f.id === fileItem.id ? { ...f, status: 'uploading', progress: 10 } : f
+        f.id === fileItem.id ? { ...f, status: 'uploading', progress: 0, stage: 'Preparing' } : f
       ));
 
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
+      // Upload file using DHIS2 DataStore API with progress callback
+      const uploadedFile = await dataStoreAPI.uploadFile(fileItem.file, currentFolderId || undefined, (pct, stage) => {
         setUploadFiles(prev => prev.map(f => {
-          if (f.id === fileItem.id && f.status === 'uploading' && f.progress < 90) {
-            return { ...f, progress: Math.min(f.progress + 10, 90) };
+          if (f.id === fileItem.id && f.status === 'uploading') {
+            return { ...f, progress: pct, stage: stage || 'Uploading' };
           }
           return f;
         }));
-      }, 200);
-
-      // Upload file using DHIS2 DataStore API
-      const uploadedFile = await dataStoreAPI.uploadFile(fileItem.file, currentFolderId || undefined);
-      
-      clearInterval(progressInterval);
+      });
       
       // Update status to completed and store the uploaded file object
       setUploadFiles(prev => prev.map(f => 
@@ -102,6 +98,7 @@ export function FileUploadDialog({
           ...f, 
           status: 'completed', 
           progress: 100, 
+          stage: 'Completed',
           uploadedFile 
         } : f
       ));
@@ -363,6 +360,13 @@ export function FileUploadDialog({
                                   borderRadius: '2px',
                                   transition: 'width 0.3s ease'
                                 }} />
+                              </div>
+                            )}
+
+                            {fileItem.status === 'uploading' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                                <span style={{ fontSize: 12, color: '#666' }}>{fileItem.stage || 'Uploading'}</span>
+                                <span style={{ fontSize: 12, color: '#333' }}>{Math.round(fileItem.progress)}%</span>
                               </div>
                             )}
 
