@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-     "zip": "powershell -Command \"if (Test-Path build.zip) { Remove-Item build.zip }; Compress-Archive -Path dist/* -DestinationPath build.zip\""
+    "zip": "powershell -Command \"if (Test-Path build.zip) { Remove-Item build.zip }; Compress-Archive -Path dist/* -DestinationPath build.zip\""
   },
   "dependencies": {
     "@dhis2/ui": "^10.8.2",
