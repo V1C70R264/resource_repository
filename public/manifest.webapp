@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "name": "DHIS2 Resource Repository",
+  "name": "Resource Repository",
   "description": "Manage and organize DHIS2 resources, documentation, and assets",
   "launch_path": "index.html",
   "appType": "APP",

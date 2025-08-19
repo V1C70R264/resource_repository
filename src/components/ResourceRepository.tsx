@@ -361,28 +361,13 @@ export function ResourceRepository() {
     fetchMe();
   }, []);
 
-  // Test API connectivity on component mount
-  useEffect(() => {
-    const testAPI = async () => {
-      try {
-        const namespaces = await dataStoreAPI.getAllNamespaces();
-        console.log('[DEBUG] API Test - Available namespaces:', namespaces);
-      } catch (error) {
-        console.error('[DEBUG] API Test failed:', error);
-      }
-    };
-    testAPI();
-  }, []);
+  // Remove verbose API test logs in production
+  // (no-op)
 
   // Combine files and folders from DHIS2
   const allFiles = [...dhis2Files, ...dhis2Folders];
 
-  // Debug logging
-  console.log('DHIS2 Files:', dhis2Files);
-  console.log('DHIS2 Folders:', dhis2Folders);
-  console.log('All Files:', allFiles);
-  console.log('Current Folder ID:', currentFolderId);
-  console.log('Active Section:', activeSection);
+  // Removed verbose console logs
 
   // Filter files for shared section based on permissions for current user
   const sharedFileIds = dhis2Permissions
@@ -1212,7 +1197,7 @@ export function ResourceRepository() {
                   </p>
                 </div>
                 
-                {/* Debug buttons */}
+                {/* Debug buttons (removed) */}
                 {/* <div className="flex gap-2">
                   <button
                     onClick={() => withBusy(() => refreshFolders())}
@@ -1463,11 +1448,7 @@ export function ResourceRepository() {
                   </button>
                 </div> */}
                 
-                {/* Debug info display */}
-                <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                  <div>Files: {debugInfo.totalFiles} | Folders: {debugInfo.totalFolders}</div>
-                  <div>Current: {debugInfo.currentFolder || 'root'} | Filtered: {debugInfo.filteredCount}</div>
-                </div>
+                {/* Debug info display removed */}
               </div>
             </div>
             
@@ -1552,200 +1533,7 @@ export function ResourceRepository() {
               />
             )}
             
-            {/* Debug Panel */}
-            <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
-              <h3 className="text-sm font-semibold mb-2">Debug Information</h3>
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <strong>DHIS2 Files:</strong> {dhis2Files.length}
-                  <br />
-                  <strong>DHIS2 Folders:</strong> {dhis2Folders.length}
-                  <br />
-                  <strong>All Items:</strong> {allFiles.length}
-                </div>
-                <div>
-                  <strong>Filtered Items:</strong> {filteredFiles.length}
-                  <br />
-                  <strong>Current Folder:</strong> {currentFolderId || 'root'}
-                  <br />
-                  <strong>Active Section:</strong> {activeSection}
-                </div>
-              </div>
-              <div className="mt-2 text-xs">
-                <strong>Folder Details:</strong>
-                <pre className="mt-1 p-2 bg-background rounded text-xs overflow-auto max-h-32">
-                  {JSON.stringify(dhis2Folders, null, 2)}
-                </pre>
-              </div>
-              
-              {/* Key Status Information */}
-              <div className="mt-2 text-xs">
-                <strong>Key Status:</strong>
-                <div className="mt-1 p-2 bg-background rounded">
-                  <div>Settings: {Object.keys(dhis2Settings || {}).length > 0 ? 'Loaded' : 'Not loaded'}</div>
-                  <div>Permissions: {dhis2Permissions.length > 0 ? 'Loaded' : 'Not loaded'}</div>
-                  <div>Users: {dhis2Users.length > 0 ? 'Loaded' : 'Not loaded'}</div>
-                  <div>Audit Logs: {dhis2AuditLogs.length > 0 ? 'Loaded' : 'Not loaded'}</div>
-                </div>
-              </div>
-              
-              {/* Settings and Permissions Details */}
-              <div className="mt-2 text-xs">
-                <strong>Settings Details:</strong>
-                <div className="mt-1 p-2 bg-background rounded">
-                  <div className="mb-2">
-                    <button
-                    onClick={async () => {
-                        try {
-                        await withBusy(() => refreshSettings());
-                          alerts.success('Settings refreshed');
-                        } catch (error) {
-                          console.error('Failed to refresh settings:', error);
-                          alerts.critical('Failed to refresh settings');
-                        }
-                      }}
-                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 mr-1"
-                    >
-                      Refresh
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const settings = await dataStoreAPI.getSettings();
-                          console.log('Current settings:', settings);
-                          alerts.success(`Settings: ${Object.keys(settings || {}).length} keys`);
-                        } catch (error) {
-                          console.error('Failed to get settings:', error);
-                          alerts.critical('Failed to get settings');
-                        }
-                      }}
-                      className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-                    >
-                      Get
-                    </button>
-                  </div>
-                  <pre className="text-xs overflow-auto max-h-24">
-                    {JSON.stringify(dhis2Settings || {}, null, 2)}
-                  </pre>
-                </div>
-              </div>
-              
-              <div className="mt-2 text-xs">
-                <strong>Permissions Details:</strong>
-                <div className="mt-1 p-2 bg-background rounded">
-                  <div className="mb-2">
-                    <button
-                    onClick={async () => {
-                        try {
-                        await withBusy(() => refreshPermissions());
-                          alerts.success('Permissions refreshed');
-                        } catch (error) {
-                          console.error('Failed to refresh permissions:', error);
-                          alerts.critical('Failed to refresh permissions');
-                        }
-                      }}
-                      className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 mr-1"
-                    >
-                      Refresh
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const permissions = await dataStoreAPI.getPermissions();
-                          console.log('Current permissions:', permissions);
-                          alerts.success(`Permissions: ${permissions?.length || 0} items`);
-                        } catch (error) {
-                          console.error('Failed to get permissions:', error);
-                          alerts.critical('Failed to get permissions');
-                        }
-                      }}
-                      className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-                    >
-                      Get
-                    </button>
-                  </div>
-                  <pre className="text-xs overflow-auto max-h-24">
-                    {JSON.stringify(dhis2Permissions || [], null, 2)}
-                  </pre>
-                </div>
-              </div>
-              
-              {/* Namespace Keys */}
-              <div className="mt-2 text-xs">
-                <strong>Namespace Keys:</strong>
-                <div className="mt-1 p-2 bg-background rounded">
-                  <button
-                    onClick={async () => {
-                      try {
-                        const keys = await dataStoreAPI.getNamespaceKeys();
-                        console.log('Namespace keys:', keys);
-                        alerts.success(`Found ${keys.length} keys: ${keys.join(', ') || 'none'}`);
-                      } catch (error) {
-                        console.error('Failed to get namespace keys:', error);
-                        alerts.critical('Failed to get namespace keys');
-                      }
-                    }}
-                    className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
-                  >
-                    Get Keys
-                  </button>
-                  <button
-                    onClick={async () => {
-                      try {
-                        const result = await dataStoreAPI.testConnectivity();
-                        console.log('Connectivity result:', result);
-                        alerts.success(`API: ${result.apiAccessible ? 'OK' : 'FAIL'}, Namespace: ${result.namespaceAccessible ? 'OK' : 'FAIL'}`);
-                      } catch (error) {
-                        console.error('Failed to test connectivity:', error);
-                        alerts.critical('Failed to test connectivity');
-                      }
-                    }}
-                    className="px-2 py-1 text-xs bg-pink-500 text-white rounded hover:bg-pink-600 ml-1"
-                  >
-                    Test
-                  </button>
-                </div>
-              </div>
-              
-              {/* Configuration Information */}
-              <div className="mt-2 text-xs">
-                <strong>Configuration:</strong>
-                <div className="mt-1 p-2 bg-background rounded">
-                  <div>Base URL: {import.meta.env.VITE_DHIS2_URL || 'https://play.dhis2.udsm.ac.tz'}</div>
-                  <div>Username: {import.meta.env.VITE_DHIS2_USERNAME || 'student'}</div>
-                  <div>Namespace: resource-repository</div>
-                  <div>API Base: /api</div>
-                </div>
-              </div>
-              
-              {/* Test Folder Creation */}
-              <div className="mt-4 p-3 bg-background rounded border">
-                <h4 className="text-sm font-semibold mb-2">Test Folder Creation</h4>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Folder name"
-                    className="flex-1 px-2 py-1 text-xs border rounded"
-                    id="test-folder-name"
-                  />
-                  <button
-                    onClick={async () => {
-                      const input = document.getElementById('test-folder-name') as HTMLInputElement;
-                      const name = input.value;
-                      if (name) {
-                        console.log('Testing folder creation:', name);
-                        const result = await createFolder(name, currentFolderId);
-                        console.log('Test result:', result);
-                        input.value = '';
-                      }
-                    }}
-                    className="px-3 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600"
-                  >
-                    Test Create
-                  </button>
-                </div>
-              </div>
-            </div>
+            {/* Debug Panel removed */}
           </div>
         </main>
       </div>
@@ -1837,12 +1625,7 @@ export function ResourceRepository() {
         </Modal>
       )}
 
-      {/* API Status Indicator */}
-      <APIStatus onStatusChange={(isConnected) => {
-        if (!isConnected) {
-          console.warn('DHIS2 API connection failed');
-        }
-      }} />
+      {/* API Status Indicator removed for production */}
       
       {/* Debug Panel - Remove this in production */}
       {/* <DebugPanel
