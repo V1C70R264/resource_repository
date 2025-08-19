@@ -62,6 +62,7 @@ export interface Permission {
   // New optional fields to support non-user targets
   targetType?: 'user' | 'group' | 'role' | 'orgUnit';
   targetId?: string;
+  ownerId?: string; // user id of the file owner (for cross-namespace fetch)
 }
 
 export interface SearchFilters {

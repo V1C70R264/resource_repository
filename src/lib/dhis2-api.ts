@@ -662,7 +662,13 @@ export class DHIS2DataStoreAPI {
       }
     }
     
-    return files;
+    // Filter by current user owner when running inside DHIS2 app
+    try {
+      const currentUserId = await this.getCurrentUserId();
+      return files.filter(f => f.owner === currentUserId);
+    } catch {
+      return files;
+    }
   }
 
   // Updated uploadFile method - now properly integrated with DataStore

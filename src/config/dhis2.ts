@@ -1,9 +1,11 @@
 // DHIS2 Configuration
 // Update these values with your actual DHIS2 server details
 
+const isRunningInDHIS2App = typeof window !== 'undefined' && /\/api\/apps\//.test(window.location.pathname);
+
 export const DHIS2_CONFIG = {
   // Base URL for your DHIS2 instance
-  BASE_URL: import.meta.env.VITE_DHIS2_URL || 'https://play.dhis2.udsm.ac.tz',
+  BASE_URL: isRunningInDHIS2App ? '' : (import.meta.env.VITE_DHIS2_URL || 'https://play.dhis2.udsm.ac.tz'),
   
   // Authentication credentials
   USERNAME: import.meta.env.VITE_DHIS2_USERNAME || 'student',
@@ -36,14 +38,20 @@ export const getApiUrl = (endpoint: string): string => {
 
 // Helper function to get auth headers
 export const getAuthHeaders = (): Record<string, string> => {
+  if (isRunningInDHIS2App) {
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    } as Record<string, string>;
+    console.log('[CONFIG DEBUG] getAuthHeaders - Using session auth in DHIS2 app');
+    return headers;
+  }
   const credentials = btoa(`${DHIS2_CONFIG.USERNAME}:${DHIS2_CONFIG.PASSWORD}`);
   const headers = {
     'Authorization': `Basic ${credentials}`,
     'Accept': 'application/json',
     'Content-Type': 'application/json',
-  };
-  console.log('[CONFIG DEBUG] getAuthHeaders - Username:', DHIS2_CONFIG.USERNAME);
-  console.log('[CONFIG DEBUG] getAuthHeaders - Credentials encoded:', credentials.substring(0, 10) + '...');
-  console.log('[CONFIG DEBUG] getAuthHeaders - Headers:', headers);
+  } as Record<string, string>;
+  console.log('[CONFIG DEBUG] getAuthHeaders - Using basic auth for dev');
   return headers;
 }; 
