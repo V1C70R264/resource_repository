@@ -8,6 +8,7 @@ import { dataStoreAPI } from "@/lib/dhis2-api";
 
 interface ShareDialogProps {
   fileId: string;
+  fileIds?: string[]; // optional multi-share
   fileName: string;
   users: User[];
   isOpen: boolean;
@@ -15,7 +16,7 @@ interface ShareDialogProps {
   onShare: (permissions: Permission[]) => void;
 }
 
-export function ShareDialog({ fileId, fileName, users: usersProp, isOpen, onClose, onShare }: ShareDialogProps) {
+export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpen, onClose, onShare }: ShareDialogProps) {
   if (!isOpen) return null;
 
   const alerts = useDHIS2Alerts();
@@ -66,12 +67,16 @@ export function ShareDialog({ fileId, fileName, users: usersProp, isOpen, onClos
   const [expiry, setExpiry] = useState<string>('');
   const [pending, setPending] = useState<Array<{ targetType: TargetType; targetId: string; permissionType: 'read'|'write'|'admin'; expiry?: string }>>([]);
 
+  const multiple = (fileIds && fileIds.length > 1) ? true : false;
+  const targetFileIds = (fileIds && fileIds.length > 0) ? fileIds : [fileId];
+
   const link = useMemo(() => {
+    if (multiple) return '';
     const base = `${window.location.origin}${window.location.pathname}`;
     const url = new URL(base);
     url.searchParams.set('fileId', fileId);
     return url.toString();
-  }, [fileId]);
+  }, [fileId, multiple]);
 
   const addRecipient = () => {
     if (!targetId) return;
@@ -89,17 +94,22 @@ export function ShareDialog({ fileId, fileName, users: usersProp, isOpen, onClos
     const entriesSeed = pending.length ? pending : (targetId ? [{ targetType, targetId, permissionType, expiry: expiry || undefined }] : []);
     if (entriesSeed.length === 0) return;
     const now = new Date().toISOString();
-    const entries: Permission[] = entriesSeed.map((entry) => ({
-      id: `perm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
-      fileId,
-      userId: entry.targetType === 'user' ? entry.targetId : '',
-      type: entry.permissionType,
-      grantedBy: 'Current User',
-      grantedAt: now,
-      expiresAt: entry.expiry,
-      targetType: entry.targetType,
-      targetId: entry.targetId,
-    }));
+    const entries: Permission[] = [];
+    for (const fid of targetFileIds) {
+      for (const entry of entriesSeed) {
+        entries.push({
+          id: `perm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+          fileId: fid,
+          userId: entry.targetType === 'user' ? entry.targetId : '',
+          type: entry.permissionType,
+          grantedBy: 'Current User',
+          grantedAt: now,
+          expiresAt: entry.expiry,
+          targetType: entry.targetType,
+          targetId: entry.targetId,
+        });
+      }
+    }
     onShare(entries);
   };
 
@@ -137,16 +147,18 @@ export function ShareDialog({ fileId, fileName, users: usersProp, isOpen, onClos
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
             <IconShare24 />
-            <span>Share — {fileName}</span>
+            <span>Share — {multiple ? `${targetFileIds.length} items` : fileName}</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button secondary small onClick={copyLink}>Copy link</Button>
-            <Button secondary small onClick={composeEmail}>Compose email</Button>
+            {!multiple && <Button secondary small onClick={copyLink}>Copy link</Button>}
+            {!multiple && <Button secondary small onClick={composeEmail}>Compose email</Button>}
           </div>
         </div>
 
         {/* Link field */}
-        <InputField label="Link" value={link} onChange={() => {}} helpText="Recipients must have permission to access." />
+        {!multiple && (
+          <InputField label="Link" value={link} onChange={() => {}} helpText="Recipients must have permission to access." />
+        )}
 
         {/* Form */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>

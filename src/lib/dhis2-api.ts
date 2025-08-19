@@ -376,9 +376,24 @@ const formatFileSize = (bytes: number): string => {
 // Data Store API Class
 export class DHIS2DataStoreAPI {
   private namespace: string;
+  private currentUserIdCache?: string;
 
   constructor(namespace: string = DHIS2_CONFIG.DEFAULT_NAMESPACE) {
     this.namespace = namespace;
+  }
+
+  private async getCurrentUserId(): Promise<string> {
+    if (this.currentUserIdCache) return this.currentUserIdCache;
+    try {
+      const url = getApiUrl('/me.json?fields=id');
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const json = await res.json();
+        this.currentUserIdCache = json?.id || '';
+        return this.currentUserIdCache || DHIS2_CONFIG.USERNAME;
+      }
+    } catch {}
+    return DHIS2_CONFIG.USERNAME;
   }
 
   // 1. GET /api/dataStore/{namespace}
@@ -660,6 +675,8 @@ export class DHIS2DataStoreAPI {
         // This covers up to ~80-85%. Saving metadata will complete to 100% below.
         onProgress?.(Math.min(Math.round(pct), 95), stage);
       });
+      // Ensure owner is current user id
+      fileMetadata.owner = await this.getCurrentUserId();
       
       // Save metadata to DataStore
       onProgress?.(95, 'Saving metadata');
@@ -784,7 +801,7 @@ export class DHIS2DataStoreAPI {
         path: parentId ? `/${parentId}/${name}` : `/${name}`,
         created: new Date().toISOString(),
         modified: new Date().toISOString(),
-        owner: DHIS2_CONFIG.USERNAME,
+        owner: await this.getCurrentUserId(),
         starred: false,
         shared: false,
         description: '',

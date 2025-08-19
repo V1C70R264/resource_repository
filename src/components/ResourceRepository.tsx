@@ -442,7 +442,9 @@ export function ResourceRepository() {
       case 'trash':
         return passesFilters && file.trashed === true;
       default:
-        return passesFilters && inCurrentFolder && !file.trashed;
+        // My Drive: only items owned by current user (or by fallback username if /me not loaded)
+        const ownerId = currentUser?.id || DHIS2_CONFIG.USERNAME;
+        return passesFilters && inCurrentFolder && !file.trashed && file.owner === ownerId;
     }
   });
   
@@ -828,18 +830,24 @@ export function ResourceRepository() {
 
   const handleShareConfirm = async (perms: Permission[]) => {
     try {
-      // merge existing + new (simple append for demo; you may fetch existing and merge by id)
-      const updated = [...dhis2Permissions, ...perms];
-      await savePermissions(updated);
+      // Merge existing + new, avoiding duplicates on same (fileId,targetType,targetId)
+      const dedupKey = (p: Permission) => `${p.fileId}|${p.targetType || 'user'}|${p.targetId}`;
+      const existingMap = new Map(dhis2Permissions.map(p => [dedupKey(p), p]));
+      for (const p of perms) {
+        existingMap.set(dedupKey(p), p);
+      }
+      const updated = Array.from(existingMap.values());
+      const ok = await savePermissions(updated);
+      if (!ok) throw new Error('Failed to save permissions');
       const log: AuditLog = {
         id: `log_${Date.now()}`,
         fileId: perms[0]?.fileId || selectedFile?.id || '',
-        fileName: selectedFile?.name || perms[0]?.fileId || '',
+        fileName: selectedFile?.name || `${perms.length} items`,
         action: 'share',
         userId: 'current-user',
         userName: 'Current User',
         timestamp: new Date().toISOString(),
-        details: `Shared with ${perms.length} recipient(s)`
+        details: `Shared ${new Set(perms.map(p => p.fileId)).size} item(s) with ${perms.length} permission entry(ies)`
       };
       await saveAuditLog(log);
       alerts.success('Shared successfully');
@@ -1598,10 +1606,11 @@ export function ResourceRepository() {
         onClose={() => setShowAuditLog(false)}
       />
 
-      {selectedFile && (
+      {(selectedFile || (selectedItems && selectedItems.length > 0)) && (
         <ShareDialog
-          fileId={selectedFile.id}
-          fileName={selectedFile.name}
+          fileId={selectedFile ? selectedFile.id : ''}
+          fileIds={selectedItems && selectedItems.length > 0 ? selectedItems : undefined}
+          fileName={selectedFile ? selectedFile.name : `${selectedItems.length} items`}
           users={dhis2Users}
           isOpen={showShare}
           onClose={() => { setShowShare(false); setSelectedFile(null); }}
