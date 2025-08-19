@@ -8,4 +8,7 @@ if (!window.location.hash) {
   window.location.replace(base);
 }
 
+// Ensure the browser title reflects the app name inside DHIS2
+document.title = 'DHIS 2 - Resource Repository';
+
 createRoot(document.getElementById("root")!).render(<App />);
