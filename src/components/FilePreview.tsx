@@ -38,31 +38,52 @@ export function FilePreview({
   const [resolvedUrl, setResolvedUrl] = useState<string>(file.url);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
+  // Normalize DHIS2 fileResources URLs to relative paths for same-origin auth
+  const normalizeUrl = (url: string): string => {
+    try {
+      // If already data/blob or relative, return as is
+      if (!/^https?:/i.test(url)) return url;
+      const u = new URL(url);
+      const path = u.pathname + (u.search || '');
+      if (/\/api\/fileResources\//i.test(path)) {
+        // Keep absolute if same-origin; else use full absolute to avoid CORS blob revoke issues
+        if (u.origin === window.location.origin) return path;
+        return url;
+      }
+      // If same-origin, return original URL
+      if (u.origin === window.location.origin) return url;
+      return url;
+    } catch {
+      return url;
+    }
+  };
+
   // Reset state when file or tab changes
   useEffect(() => {
     setIsLoading(true);
     setPreviewError(null);
     setZoom(100);
     setRotation(0);
-    setResolvedUrl(file.url);
+    setResolvedUrl(normalizeUrl(file.url));
   }, [file, activeTab]);
 
   // Prefetch secured URLs with auth and convert to blob URL for media
   useEffect(() => {
     let cancelled = false;
-    const needsFetch = /^https?:/i.test(file.url) && !file.url.startsWith('data:');
+    const normalized = normalizeUrl(file.url);
+    const needsFetch = /^https?:/i.test(normalized) && !normalized.startsWith('data:') && (file.mimeType.startsWith('video/') || file.mimeType.startsWith('audio/') || file.mimeType === 'application/pdf' || file.mimeType.startsWith('image/'));
     const isOfficeDoc = isWord || isExcel;
     const isMedia = file.mimeType.startsWith('video/') || file.mimeType.startsWith('audio/') || file.mimeType === 'application/pdf' || file.mimeType.startsWith('image/');
 
     if (!needsFetch || (!isMedia && !isText)) {
-      setResolvedUrl(file.url);
+      setResolvedUrl(normalized);
       setIsLoading(false);
       return () => {};
     }
 
     // For Office docs we don't prefetch; Office viewer needs the original URL
     if (isOfficeDoc) {
-      setResolvedUrl(file.url);
+      setResolvedUrl(normalized);
       setIsLoading(false);
       return () => {};
     }
@@ -71,7 +92,7 @@ export function FilePreview({
       try {
         const headers = getAuthHeaders();
         delete (headers as any)['Content-Type'];
-        const resp = await fetch(file.url, { headers });
+        const resp = await fetch(normalized, { headers, credentials: 'include' as any });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const blob = await resp.blob();
         if (cancelled) return;
@@ -81,14 +102,14 @@ export function FilePreview({
         setIsLoading(false);
       } catch (e) {
         if (!cancelled) {
-          setResolvedUrl(file.url);
+          setResolvedUrl(normalizeUrl(file.url));
           setIsLoading(false);
         }
       }
     })();
     return () => {
       cancelled = true;
-      setResolvedUrl(file.url);
+      setResolvedUrl(normalizeUrl(file.url));
       setIsLoading(false);
       setObjectUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     };
@@ -244,7 +265,7 @@ export function FilePreview({
               transition: "transform 0.2s ease",
             }}
             onLoadStart={() => setIsLoading(true)}
-            onCanPlay={() => setIsLoading(false)}
+            onLoadedMetadata={() => setIsLoading(false)}
             onError={() => {
               setIsLoading(false);
             }}

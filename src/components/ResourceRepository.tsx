@@ -301,14 +301,19 @@ export function ResourceRepository() {
 
   const deleteSelected = async () => {
     await withBusy(async () => {
+      const ownerId = currentUser?.id || DHIS2_CONFIG.USERNAME;
       let successCount = 0;
+      let skipped = 0;
       for (const id of selectedItems) {
         const item = allFiles.find(f => f.id === id);
         if (!item) continue;
+        // Only owners can delete; recipients cannot delete shared items owned by others
+        if (item.owner !== ownerId) { skipped += 1; continue; }
         const ok = await moveToTrash(item);
-        if (ok) successCount += 1;
+        if (ok) successCount += 1; else skipped += 1;
       }
       if (successCount > 0) alerts.warning(`Moved ${successCount} item${successCount > 1 ? 's' : ''} to trash`);
+      if (skipped > 0) alerts.info(`Skipped ${skipped} item${skipped > 1 ? 's' : ''} you don't own`);
       clearSelection();
     });
   };
@@ -467,6 +472,11 @@ export function ResourceRepository() {
     })
     .map(p => p.fileId);
 
+  // Determine if current breadcrumb path is within a shared folder hierarchy
+  const isInsideSharedHierarchy = useMemo(() => {
+    return breadcrumbs.some(bc => bc.id !== 'root' && sharedFileIds.includes(bc.id));
+  }, [breadcrumbs, sharedFileIds]);
+
   // When section changes via Sidebar, reset folder scope appropriately
   useEffect(() => {
     if (activeSection === 'my-drive') {
@@ -509,13 +519,17 @@ export function ResourceRepository() {
     switch (activeSection) {
       case 'shared':
         // Only show files/folders shared to the current user
-        return sharedFileIds.includes(file.id) && !file.trashed;
+        // If we're inside a shared folder, show that folder's direct children regardless of individual share flags
+        if (currentFolderId && isInsideSharedHierarchy) {
+          return !file.trashed && file.parentId === currentFolderId;
+        }
+        return !file.trashed && sharedFileIds.includes(file.id);
       case 'starred':
-        return passesFilters && file.starred && !file.trashed;
+        return passesFilters && file.starred && !file.trashed && (file.owner === (currentUser?.id || DHIS2_CONFIG.USERNAME) || sharedFileIds.includes(file.id));
       case 'recent':
-        return passesFilters && !file.trashed && isRecent;
+        return passesFilters && !file.trashed && isRecent && (file.owner === (currentUser?.id || DHIS2_CONFIG.USERNAME) || sharedFileIds.includes(file.id));
       case 'trash':
-        return passesFilters && file.trashed === true;
+        return passesFilters && file.trashed === true && file.owner === (currentUser?.id || DHIS2_CONFIG.USERNAME);
       default:
         // My Drive: only items owned by current user (or by fallback username if /me not loaded)
         const ownerId = currentUser?.id || DHIS2_CONFIG.USERNAME;
@@ -556,7 +570,7 @@ export function ResourceRepository() {
             if (dhis2File?.content) {
               const mime = dhis2File.mimeType || item.mimeType || 'application/octet-stream';
               previewUrl = `data:${mime};base64,${dhis2File.content}`;
-            } else if (dhis2File?.url && /^https?:|^data:|^blob:/.test(dhis2File.url) === true) {
+            } else if (dhis2File?.url && (/^https?:|^data:|^blob:|^\//.test(dhis2File.url) === true)) {
               previewUrl = dhis2File.url;
             } else {
               // As a last resort, try thumbnail for images
@@ -635,6 +649,11 @@ export function ResourceRepository() {
         break;
       case 'delete':
         // Show confirmation modal instead of immediate delete
+        // Only allow delete if current user is the owner
+        if ((currentUser?.id || DHIS2_CONFIG.USERNAME) !== item.owner) {
+          alerts.info('You cannot delete items you do not own');
+          break;
+        }
         setDeleteTarget(item);
         setShowDeleteConfirm(true);
         break;
@@ -905,10 +924,25 @@ export function ResourceRepository() {
 
   const handleShareConfirm = async (perms: Permission[]) => {
     try {
+      // Expand permissions to descendants when sharing folders
+      const expandedPerms: Permission[] = [...perms];
+      for (const p of perms) {
+        const item = allFiles.find(f => f.id === p.fileId);
+        if (item && item.type === 'folder') {
+          const descendantIds = collectDescendantItemIds(item.id);
+          for (const did of descendantIds) {
+            expandedPerms.push({
+              ...p,
+              id: `perm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+              fileId: did,
+            });
+          }
+        }
+      }
       // Merge existing + new, avoiding duplicates on same (fileId,targetType,targetId)
       const dedupKey = (p: Permission) => `${p.fileId}|${p.targetType || 'user'}|${p.targetId}`;
       const existingMap = new Map(dhis2Permissions.map(p => [dedupKey(p), p]));
-      for (const p of perms) {
+      for (const p of expandedPerms) {
         existingMap.set(dedupKey(p), p);
       }
       const updated = Array.from(existingMap.values());
@@ -916,13 +950,13 @@ export function ResourceRepository() {
       if (!ok) throw new Error('Failed to save permissions');
       const log: AuditLog = {
         id: `log_${Date.now()}`,
-        fileId: perms[0]?.fileId || selectedFile?.id || '',
-        fileName: selectedFile?.name || `${perms.length} items`,
+        fileId: expandedPerms[0]?.fileId || selectedFile?.id || '',
+        fileName: selectedFile?.name || `${expandedPerms.length} items`,
         action: 'share',
         userId: 'current-user',
         userName: 'Current User',
         timestamp: new Date().toISOString(),
-        details: `Shared ${new Set(perms.map(p => p.fileId)).size} item(s) with ${perms.length} permission entry(ies)`
+        details: `Shared ${new Set(expandedPerms.map(p => p.fileId)).size} item(s) with ${expandedPerms.length} permission entry(ies)`
       };
       await saveAuditLog(log);
       alerts.success('Shared successfully');
@@ -1055,6 +1089,31 @@ export function ResourceRepository() {
     return result;
   };
 
+  // Collect all descendant item ids (files and folders) for a folder
+  const collectDescendantItemIds = (folderId: string): string[] => {
+    const idToChildren = new Map<string, FileItem[]>();
+    for (const itm of allFiles) {
+      if (itm.parentId) {
+        const arr = idToChildren.get(itm.parentId) || [];
+        arr.push(itm);
+        idToChildren.set(itm.parentId, arr);
+      }
+    }
+    const result: string[] = [];
+    const stack: string[] = [folderId];
+    while (stack.length) {
+      const id = stack.pop()!;
+      const children = idToChildren.get(id) || [];
+      for (const ch of children) {
+        result.push(ch.id);
+        if (ch.type === 'folder') {
+          stack.push(ch.id);
+        }
+      }
+    }
+    return result;
+  };
+
   // Build folder child counts (direct children only, excluding trashed)
   const folderChildCounts: Record<string, number> = (() => {
     const counts: Record<string, number> = {};
@@ -1177,11 +1236,11 @@ export function ResourceRepository() {
           onFileUploadClick={handleFileUploadClick}
           onFolderUploadClick={handleFolderUploadClick}
           counts={{
-            myDrive: allFiles.filter(f => !f.trashed && (!f.parentId || f.parentId === 'root')).length,
+            myDrive: allFiles.filter(f => !f.trashed && f.owner === (currentUser?.id || DHIS2_CONFIG.USERNAME) && !f.parentId).length,
             shared: Array.from(new Set(sharedFileIds)).length,
-            recent: allFiles.filter(f => !f.trashed && (Date.now() - new Date(f.modified).getTime() <= 30 * 24 * 60 * 60 * 1000)).length,
-            starred: allFiles.filter(f => f.starred && !f.trashed).length,
-            trash: allFiles.filter(f => f.trashed).length,
+            recent: allFiles.filter(f => !f.trashed && (Date.now() - new Date(f.modified).getTime() <= 30 * 24 * 60 * 60 * 1000) && (f.owner === (currentUser?.id || DHIS2_CONFIG.USERNAME) || sharedFileIds.includes(f.id))).length,
+            starred: allFiles.filter(f => f.starred && !f.trashed && (f.owner === (currentUser?.id || DHIS2_CONFIG.USERNAME) || sharedFileIds.includes(f.id))).length,
+            trash: allFiles.filter(f => f.trashed && f.owner === (currentUser?.id || DHIS2_CONFIG.USERNAME)).length,
           }}
         />
         
@@ -1612,6 +1671,7 @@ export function ResourceRepository() {
                 showCheckboxes={showCheckboxes}
                 onItemTap={handleItemTap}
                 onSelectChange={handleSelectChange}
+                canDelete={(item) => (currentUser?.id || DHIS2_CONFIG.USERNAME) === item.owner}
               />
             )}
             

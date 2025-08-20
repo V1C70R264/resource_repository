@@ -255,7 +255,7 @@ export function FileUploadDialog({
                   marginBottom: '12px',
                   fontSize: '14px'
                 }}>
-                  You can upload multiple files at once (max 50MB per file)
+                  You can upload multiple files at once (max 500MB per file)
                 </p>
                 <Button
                   secondary

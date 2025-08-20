@@ -15,9 +15,10 @@ interface FileGridProps {
   showCheckboxes?: { [id: string]: boolean };
   onItemTap?: (item: FileItem) => void;
   onSelectChange?: (item: FileItem, checked: boolean) => void;
+  canDelete?: (item: FileItem) => boolean;
 }
 
-export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChildCounts = {}, selectedItems, showCheckboxes, onItemTap, onSelectChange }: FileGridProps) {
+export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChildCounts = {}, selectedItems, showCheckboxes, onItemTap, onSelectChange, canDelete }: FileGridProps) {
   const DHIS_BLUE_TINT = 'rgba(10, 110, 180, 0.08)'
   // Single contextual menu using DHIS2 Popover + Menu
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
@@ -165,7 +166,9 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
               <MenuItem label="Edit Metadata" onClick={() => { if (menuItem) onItemAction('metadata', menuItem); closeMenu(); }} />
               <MenuItem label="Access Control" onClick={() => { if (menuItem) onItemAction('permissions', menuItem); closeMenu(); }} />
               <MenuItem label="View Audit Log" onClick={() => { if (menuItem) onItemAction('audit', menuItem); closeMenu(); }} />
-              <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />
+              {(!menuItem || !canDelete || canDelete(menuItem)) && (
+                <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />
+              )}
             </Menu>
           </Popover>
         )}
@@ -270,7 +273,9 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
             <MenuItem label="Edit Metadata" onClick={() => { if (menuItem) onItemAction('metadata', menuItem); closeMenu(); }} />
             <MenuItem label="Access Control" onClick={() => { if (menuItem) onItemAction('permissions', menuItem); closeMenu(); }} />
             <MenuItem label="View Audit Log" onClick={() => { if (menuItem) onItemAction('audit', menuItem); closeMenu(); }} />
-            <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />
+            {(!menuItem || !canDelete || canDelete(menuItem)) && (
+              <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />
+            )}
           </Menu>
         </Popover>
       )}
