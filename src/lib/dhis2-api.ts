@@ -603,6 +603,28 @@ export class DHIS2DataStoreAPI {
     try {
       const key = `file_${file.id}`;
       console.log('[API DEBUG] saveFile - Saving file with key:', key);
+      // Merge with existing to avoid dropping binary fields (content/url/checksum)
+      let existing: any = null;
+      try {
+        existing = await this.getKeyValueSafe(key);
+      } catch (e) {
+        existing = null;
+      }
+      const merged: DHIS2File = {
+        ...(existing || {}),
+        ...file,
+        // Preserve content/url/checksum if not provided in the update
+        content: (file as any).content !== undefined ? (file as any).content : existing?.content,
+        url: (file as any).url !== undefined ? (file as any).url : existing?.url,
+        checksum: (file as any).checksum !== undefined ? (file as any).checksum : existing?.checksum,
+        uploadStatus: (file as any).uploadStatus !== undefined ? (file as any).uploadStatus : (existing?.uploadStatus || 'completed'),
+        uploadProgress: (file as any).uploadProgress !== undefined ? (file as any).uploadProgress : (existing?.uploadProgress ?? 100),
+      } as DHIS2File;
+      // If we have content or a URL, assume the file is available
+      if ((merged as any).content || (merged as any).url) {
+        merged.uploadStatus = 'completed';
+        merged.uploadProgress = 100;
+      }
       
       // Add retry logic for saving
       let attempts = 0;
@@ -614,7 +636,7 @@ export class DHIS2DataStoreAPI {
         console.log(`[API DEBUG] saveFile - Attempt ${attempts}/${maxAttempts}`);
         
         try {
-          const result = await this.setKeyValue(key, file);
+          const result = await this.setKeyValue(key, merged);
           if (result) {
             success = true;
             console.log('[API DEBUG] saveFile - File saved successfully on attempt', attempts);

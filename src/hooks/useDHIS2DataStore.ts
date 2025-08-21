@@ -152,7 +152,9 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     try {
       const fetchedFiles = await dataStoreAPI.getAllFiles();
       const convertedFiles = fetchedFiles.map(convertDHIS2FileToFileItem);
-      setFiles(convertedFiles);
+      // Dedupe by id to avoid duplicate React keys
+      const unique = Array.from(new Map(convertedFiles.map(f => [f.id, f])).values());
+      setFiles(unique);
     } catch (error) {
       setErrorFiles(error instanceof Error ? error.message : 'Failed to load files');
     } finally {
@@ -162,33 +164,42 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
 
   const saveFile = useCallback(async (file: FileItem): Promise<boolean> => {
     try {
-      const dhis2File: DHIS2File = {
+      // Preserve existing stored fields like content/url/checksum/uploadStatus
+      const existing = await dataStoreAPI.getFile(file.id);
+
+      const merged: DHIS2File = {
         id: file.id,
         name: file.name,
-        type: file.type as any,
-        fileType: file.fileType,
-        mimeType: file.mimeType,
-        size: file.size,
-        sizeFormatted: file.sizeFormatted,
-        modified: file.modified,
-        created: file.created,
-        owner: file.owner,
-        starred: file.starred,
-        shared: file.shared,
-        thumbnail: file.thumbnail,
-        tags: file.tags,
-        language: file.language,
-        documentType: file.documentType,
-        description: file.description,
-        version: file.version,
-        parentId: file.parentId,
-        path: file.path,
-        uploadStatus: 'uploading',
-        trashed: file.trashed,
-        deletedAt: file.deletedAt,
+        type: (file.type as any) || (existing?.type as any) || 'file',
+        fileType: file.fileType ?? existing?.fileType,
+        mimeType: file.mimeType ?? existing?.mimeType,
+        size: file.size ?? existing?.size,
+        sizeFormatted: file.sizeFormatted ?? existing?.sizeFormatted,
+        // Always update modified timestamp on metadata save
+        modified: new Date().toISOString(),
+        created: file.created ?? existing?.created ?? new Date().toISOString(),
+        owner: file.owner ?? existing?.owner ?? '',
+        starred: file.starred ?? existing?.starred ?? false,
+        shared: file.shared ?? existing?.shared ?? false,
+        thumbnail: file.thumbnail ?? existing?.thumbnail,
+        tags: file.tags ?? existing?.tags ?? [],
+        language: file.language ?? existing?.language,
+        documentType: file.documentType ?? existing?.documentType,
+        description: file.description ?? existing?.description,
+        version: file.version ?? existing?.version,
+        parentId: file.parentId ?? existing?.parentId,
+        path: file.path ?? existing?.path ?? `/${file.name}`,
+        // Preserve content/url/checksum to keep previews working
+        content: existing?.content,
+        url: existing?.url,
+        checksum: existing?.checksum,
+        uploadStatus: existing?.uploadStatus ?? 'completed',
+        uploadProgress: existing?.uploadProgress,
+        trashed: file.trashed ?? existing?.trashed ?? false,
+        deletedAt: file.deletedAt ?? existing?.deletedAt,
       };
-      
-      const success = await dataStoreAPI.saveFile(dhis2File);
+
+      const success = await dataStoreAPI.saveFile(merged);
       if (success) {
         await refreshFiles();
       }
@@ -233,11 +244,11 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
       const dhis2Folders = await dataStoreAPI.getAllFolders();
       console.log('[DEBUG] refreshFolders - Retrieved folders:', dhis2Folders);
       
-      // Convert DHIS2Folder objects to FileItem objects
+      // Convert DHIS2Folder objects to FileItem objects and dedupe by id
       const convertedFolders = dhis2Folders.map((folder) => convertDHIS2FolderToFileItem(folder));
-      console.log('[DEBUG] refreshFolders - Converted folders:', convertedFolders);
-      
-      setFolders(convertedFolders);
+      const unique = Array.from(new Map(convertedFolders.map(f => [f.id, f])).values());
+      console.log('[DEBUG] refreshFolders - Converted folders:', unique);
+      setFolders(unique);
     } catch (error) {
       console.error('[DEBUG] refreshFolders - Error:', error);
       setErrorFolders(error instanceof Error ? error.message : 'Failed to load folders');
