@@ -82,7 +82,8 @@ export interface DHIS2Folder {
 // File upload configuration
 const FILE_UPLOAD_CONFIG = {
   MAX_INLINE_SIZE: 50 * 1024 * 1024, // 50MB - files smaller than this will be stored inline
-  MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB - maximum file size
+  MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB - maximum file size for non-video files
+  MAX_FILE_SIZE_VIDEO: 2 * 1024 * 1024 * 1024, // 2GB - maximum file size for video files
   SUPPORTED_TYPES: [
     'application/pdf',
     'application/msword',
@@ -177,6 +178,8 @@ const uploadToFileResources = async (file: File, onProgress?: (pct: number) => v
   const xhrPost = (url: string) => new Promise<{ ok: boolean; status: number; statusText: string; json: any }>((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
+    // Extend timeout for large media uploads (e.g., up to 30 minutes)
+    xhr.timeout = 30 * 60 * 1000;
     // Set headers
     Object.entries(headers).forEach(([k, v]) => {
       try { xhr.setRequestHeader(k, v as string); } catch {}
@@ -194,6 +197,10 @@ const uploadToFileResources = async (file: File, onProgress?: (pct: number) => v
         try { json = JSON.parse(xhr.responseText || '{}'); } catch {}
         resolve({ ok, status: xhr.status, statusText: xhr.statusText, json });
       }
+    };
+    xhr.ontimeout = () => {
+      // Let caller treat as non-OK with explicit status text
+      resolve({ ok: false, status: 0, statusText: 'Request timeout', json: { message: 'Upload timed out' } });
     };
     xhr.send(form);
   });
@@ -218,9 +225,11 @@ const uploadToFileResources = async (file: File, onProgress?: (pct: number) => v
 const uploadFileToDataStore = async (file: File, folderId?: string, onProgress?: UploadProgressCallback): Promise<DHIS2File> => {
   console.log('[API DEBUG] uploadFileToDataStore - Starting upload for file:', file.name, 'size:', file.size);
   
-  // Validate file size
-  if (file.size > FILE_UPLOAD_CONFIG.MAX_FILE_SIZE) {
-    throw new Error(`File size ${file.size} bytes exceeds maximum allowed size of ${FILE_UPLOAD_CONFIG.MAX_FILE_SIZE} bytes`);
+  // Validate file size with media-specific limits
+  const isVideo = file.type.startsWith('video/');
+  const maxAllowed = isVideo ? FILE_UPLOAD_CONFIG.MAX_FILE_SIZE_VIDEO : FILE_UPLOAD_CONFIG.MAX_FILE_SIZE;
+  if (file.size > maxAllowed) {
+    throw new Error(`File size ${file.size} bytes exceeds maximum allowed size of ${maxAllowed} bytes`);
   }
   
   // Validate file type
@@ -254,8 +263,11 @@ const uploadFileToDataStore = async (file: File, folderId?: string, onProgress?:
   
   try {
     onProgress?.(0, 'Preparing');
-    // For small/medium files, store content inline as base64
-    if (file.size <= FILE_UPLOAD_CONFIG.MAX_INLINE_SIZE) {
+    // Decide storage strategy
+    const isMediaFile = file.type.startsWith('video/') || file.type.startsWith('audio/');
+    // For media files, always use DHIS2 fileResources to preserve streaming/seek
+    // For other small/medium files, store content inline as base64
+    if (!isMediaFile && file.size <= FILE_UPLOAD_CONFIG.MAX_INLINE_SIZE) {
       console.log('[API DEBUG] uploadFileToDataStore - Inline content');
       const READ_WEIGHT = 70; // %
       const CHECKSUM_WEIGHT = 10; // %
@@ -288,6 +300,8 @@ const uploadFileToDataStore = async (file: File, folderId?: string, onProgress?:
         onProgress?.(BEFORE_SAVE_TOTAL, 'Finalizing');
       } catch (e) {
         console.error('[API DEBUG] uploadFileToDataStore - fileResources upload failed, falling back to blob URL', e);
+        // Fall back to a local blob URL for any file (including media) to preserve demo behavior
+        // Note: Recipients may not be able to access blob URLs outside this browser session
         try {
           const blobUrl = URL.createObjectURL(file);
           fileMetadata.url = blobUrl;

@@ -2,10 +2,13 @@
 // Update these values with your actual DHIS2 server details
 
 const isRunningInDHIS2App = typeof window !== 'undefined' && /\/api\/apps\//.test(window.location.pathname);
+const isDev = typeof window !== 'undefined' && window.location.origin.includes('localhost');
 
 export const DHIS2_CONFIG = {
   // Base URL for your DHIS2 instance
-  BASE_URL: isRunningInDHIS2App ? '' : (import.meta.env.VITE_DHIS2_URL || 'https://play.dhis2.udsm.ac.tz'),
+  BASE_URL: isRunningInDHIS2App
+    ? ''
+    : (isDev ? '' : (import.meta.env.VITE_DHIS2_URL || 'https://play.dhis2.udsm.ac.tz')),
   
   // Authentication credentials
   USERNAME: import.meta.env.VITE_DHIS2_USERNAME || 'student',

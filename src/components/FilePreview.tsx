@@ -92,6 +92,7 @@ export function FilePreview({
       try {
         const headers = getAuthHeaders();
         delete (headers as any)['Content-Type'];
+        delete (headers as any)['Accept'];
         const resp = await fetch(normalized, { headers, credentials: 'include' as any });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const blob = await resp.blob();

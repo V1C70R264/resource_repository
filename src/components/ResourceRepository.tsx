@@ -1031,6 +1031,7 @@ export function ResourceRepository() {
           try {
             const headers = getAuthHeaders();
             delete (headers as any)['Content-Type'];
+            delete (headers as any)['Accept'];
             const resp = await fetch(rec.url, { headers });
             const blob = await resp.blob();
             triggerBrowserDownload(blob, filename);
