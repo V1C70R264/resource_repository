@@ -21,6 +21,10 @@ export interface FileMetadata {
   path: string;
   trashed?: boolean;
   deletedAt?: string;
+  // Preview and storage data
+  content?: string; // Base64 encoded content for inline files
+  url?: string; // URL for external files (DHIS2 fileResources, blob URLs, etc.)
+  checksum?: string; // File integrity hash
 }
 
 export interface FileItem extends FileMetadata {
@@ -84,6 +88,7 @@ export interface PreviewData {
   fileType: string;
   mimeType: string;
   url: string;
+  content?: string; // Base64 content for inline files
   thumbnail?: string;
   canEdit: boolean;
 }

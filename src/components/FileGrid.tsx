@@ -111,8 +111,14 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
                           }}
                           title={item.name}
                           onClick={() => {
-                            if (onItemTap) onItemTap(item);
-                            else openItem(item);
+                            // For files, immediately trigger preview
+                            if (item.type === 'file') {
+                              onItemAction('preview', item);
+                            } else {
+                              // For folders, use the tap handler if available, otherwise open directly
+                              if (onItemTap) onItemTap(item);
+                              else onItemClick(item);
+                            }
                           }}
                         >
                           {item.name}
@@ -185,7 +191,16 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
           const childCount = folderChildCounts[item.id] || 0
           const isSelected = selectedItems?.includes(item.id) || false
           return (
-            <div key={item.id} className="group relative cursor-pointer" onClick={onItemTap ? () => onItemTap(item) : undefined}>
+            <div key={item.id} className="group relative cursor-pointer" onClick={() => {
+              // For files, immediately trigger preview
+              if (item.type === 'file') {
+                onItemAction('preview', item);
+              } else {
+                // For folders, use the tap handler if available
+                if (onItemTap) onItemTap(item);
+                else onItemClick(item);
+              }
+            }}>
               <Card>
                 {/* Increase height to fit icon, name, size, and a reserved tags row */}
                 <div className={`hover:shadow-md transition-all hover:border-drive-blue/30 h-40 w-full p-4 ${isSelected ? 'bg-[rgba(10,110,180,0.08)]' : ''}`}>

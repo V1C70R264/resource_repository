@@ -64,7 +64,16 @@ export function FilePreview({
     setPreviewError(null);
     setZoom(100);
     setRotation(0);
-    setResolvedUrl(normalizeUrl(file.url));
+    
+    // If we have content, create a data URL immediately
+    if (file.content) {
+      const mime = file.mimeType || 'application/octet-stream';
+      const dataUrl = `data:${mime};base64,${file.content}`;
+      setResolvedUrl(dataUrl);
+      setIsLoading(false);
+    } else {
+      setResolvedUrl(normalizeUrl(file.url));
+    }
   }, [file, activeTab]);
 
   // Prefetch secured URLs with auth and convert to blob URL for media

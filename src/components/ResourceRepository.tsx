@@ -563,32 +563,52 @@ export function ResourceRepository() {
       case 'preview':
         if (item.type === 'file') {
           try {
-            // Fetch full file record to get inline content or a stored URL
-            const dhis2File = await dataStoreAPI.getFile(item.id);
             let previewUrl = '';
+            let dhis2File = null;
 
-            if (dhis2File?.content) {
-              const mime = dhis2File.mimeType || item.mimeType || 'application/octet-stream';
-              previewUrl = `data:${mime};base64,${dhis2File.content}`;
-            } else if (dhis2File?.url && (/^https?:|^data:|^blob:|^\//.test(dhis2File.url) === true)) {
-              previewUrl = dhis2File.url;
+            // First check if the FileItem already has the preview data
+            if (item.content) {
+              const mime = item.mimeType || 'application/octet-stream';
+              previewUrl = `data:${mime};base64,${item.content}`;
+            } else if (item.url && (/^https?:|^data:|^blob:|^\//.test(item.url))) {
+              previewUrl = item.url;
             } else {
-              // As a last resort, try thumbnail for images
-              if (item.thumbnail) {
-                previewUrl = item.thumbnail;
+              // Fall back to fetching from API
+              dhis2File = await dataStoreAPI.getFile(item.id);
+              // Check for inline content first (base64)
+              if (dhis2File?.content) {
+                const mime = item.mimeType || dhis2File?.mimeType || 'application/octet-stream';
+                previewUrl = `data:${mime};base64,${dhis2File.content}`;
+              } 
+              // Check for stored URL (DHIS2 fileResources or blob)
+              else if (dhis2File?.url) {
+                if (/^https?:|^data:|^blob:|^\//.test(dhis2File.url)) {
+                  previewUrl = dhis2File.url;
+                }
               }
             }
 
+            // Check for thumbnail as fallback for images
+            if (!previewUrl && item.thumbnail) {
+              previewUrl = item.thumbnail;
+            }
+
+            // For images, try to construct a data URL from the original file if available
+            if (!previewUrl && item.mimeType?.startsWith('image/')) {
+              throw new Error('Image content not available for preview. Please download the file.');
+            }
+
             if (!previewUrl) {
-              throw new Error('No previewable content found for this file');
+              throw new Error('No previewable content found for this file. The file may need to be re-uploaded.');
             }
 
             const previewData: PreviewData = {
               fileId: item.id,
               fileName: item.name,
               fileType: item.fileType || 'unknown',
-              mimeType: item.mimeType || 'application/octet-stream',
+              mimeType: item.mimeType || dhis2File?.mimeType || 'application/octet-stream',
               url: previewUrl,
+              content: item.content || dhis2File?.content,
               thumbnail: item.thumbnail,
               canEdit: true,
             };
@@ -625,25 +645,74 @@ export function ResourceRepository() {
         break;
       case 'star':
         await withBusy(async () => {
-          console.log('[DEBUG] Star action - Original item:', item);
-          const updatedItem = { ...item, starred: !item.starred };
-          console.log('[DEBUG] Star action - Updated item:', updatedItem);
-          
-          let ok: boolean;
-          if (item.type === 'file') {
-            console.log('[DEBUG] Star action - Saving file...');
-            ok = await saveFile(updatedItem);
-          } else {
-            console.log('[DEBUG] Star action - Saving folder...');
-            ok = await saveFolder(updatedItem);
-          }
-          
-          console.log('[DEBUG] Star action - Save result:', ok);
-          
-          if (ok) {
-            alerts.success(`${updatedItem.starred ? 'Starred' : 'Removed star from'}: ${item.name}`);
-          } else {
-            alerts.critical(`Failed to ${item.starred ? 'remove star from' : 'star'}: ${item.name}`);
+          try {
+            // Fetch full stored record to preserve preview fields
+            const existing = item.type === 'file' ? await dataStoreAPI.getFile(item.id) : await dataStoreAPI.getFolder(item.id as string);
+            if (item.type === 'file') {
+              const toSave: any = {
+                ...(existing || {}),
+                id: item.id,
+                name: item.name,
+                type: 'file',
+                fileType: item.fileType ?? (existing as any)?.fileType,
+                mimeType: item.mimeType ?? (existing as any)?.mimeType,
+                size: item.size ?? (existing as any)?.size,
+                sizeFormatted: item.sizeFormatted ?? (existing as any)?.sizeFormatted,
+                modified: new Date().toISOString(),
+                created: item.created ?? (existing as any)?.created ?? new Date().toISOString(),
+                owner: item.owner ?? (existing as any)?.owner ?? '',
+                starred: !item.starred,
+                shared: item.shared ?? (existing as any)?.shared ?? false,
+                thumbnail: item.thumbnail ?? (existing as any)?.thumbnail,
+                tags: item.tags ?? (existing as any)?.tags ?? [],
+                language: item.language ?? (existing as any)?.language,
+                documentType: item.documentType ?? (existing as any)?.documentType,
+                description: item.description ?? (existing as any)?.description,
+                version: item.version ?? (existing as any)?.version,
+                parentId: item.parentId ?? (existing as any)?.parentId,
+                path: item.path ?? (existing as any)?.path ?? `/${item.name}`,
+                // Critically preserve preview fields
+                content: (existing as any)?.content,
+                url: (existing as any)?.url,
+                checksum: (existing as any)?.checksum,
+                uploadStatus: (existing as any)?.uploadStatus ?? 'completed',
+                uploadProgress: (existing as any)?.uploadProgress ?? 100,
+                trashed: item.trashed ?? (existing as any)?.trashed ?? false,
+                deletedAt: item.deletedAt ?? (existing as any)?.deletedAt,
+              };
+              const ok = await dataStoreAPI.saveFile(toSave);
+              if (ok) {
+                alerts.success(`${toSave.starred ? 'Starred' : 'Removed star from'}: ${item.name}`);
+                await refreshFiles();
+              } else {
+                alerts.critical(`Failed to ${item.starred ? 'remove star from' : 'star'}: ${item.name}`);
+              }
+            } else {
+              const toSave: any = {
+                ...(existing || {}),
+                id: item.id,
+                name: item.name,
+                type: 'folder',
+                parentId: item.parentId ?? (existing as any)?.parentId,
+                path: item.path ?? (existing as any)?.path,
+                created: item.created ?? (existing as any)?.created,
+                modified: new Date().toISOString(),
+                owner: item.owner ?? (existing as any)?.owner,
+                starred: !item.starred,
+                shared: item.shared ?? (existing as any)?.shared ?? false,
+                description: item.description ?? (existing as any)?.description,
+                tags: item.tags ?? (existing as any)?.tags,
+              };
+              const ok = await dataStoreAPI.saveFolder(toSave);
+              if (ok) {
+                alerts.success(`${toSave.starred ? 'Starred' : 'Removed star from'}: ${item.name}`);
+                await refreshFolders();
+              } else {
+                alerts.critical(`Failed to ${item.starred ? 'remove star from' : 'star'}: ${item.name}`);
+              }
+            }
+          } catch (e) {
+            alerts.critical('Failed to update star status');
           }
         });
         break;
@@ -780,12 +849,29 @@ export function ResourceRepository() {
     try {
       console.log('[DEBUG] handleFileUploadComplete - Received uploaded files:', uploadedFiles);
       
+      // Add a small delay to ensure DHIS2 DataStore has time to persist the data
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // The files are already uploaded via the FileUploadDialog, so we just need to refresh
       // and show success message
       await withBusy(() => refreshFiles());
       
       if (uploadedFiles.length > 0) {
         alerts.success(`Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
+        
+        // Debug: Check the structure of uploaded files
+        console.log('[DEBUG] Uploaded files structure:');
+        uploadedFiles.forEach((file, index) => {
+          console.log(`[DEBUG] File ${index}:`, {
+            id: file.id,
+            name: file.name,
+            type: file.type,
+            content: file.content ? 'Has content' : 'No content',
+            url: file.url ? 'Has URL' : 'No URL',
+            mimeType: file.mimeType,
+            size: file.size
+          });
+        });
       }
     } catch (error) {
       console.error('Error handling file upload completion:', error);

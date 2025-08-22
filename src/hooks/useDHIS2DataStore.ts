@@ -94,7 +94,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
 
   // Convert DHIS2File to FileItem
   const convertDHIS2FileToFileItem = (dhis2File: DHIS2File): FileItem => {
-    return {
+    const converted = {
       id: dhis2File.id,
       name: dhis2File.name,
       type: dhis2File.type,
@@ -117,7 +117,24 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
       path: dhis2File.path,
       trashed: dhis2File.trashed || false,
       deletedAt: dhis2File.deletedAt,
+      // Preserve preview data
+      content: dhis2File.content,
+      url: dhis2File.url,
+      checksum: dhis2File.checksum,
     };
+    
+    console.log(`[DEBUG] Converting file "${dhis2File.name}":`, {
+      hasContent: !!dhis2File.content,
+      hasUrl: !!dhis2File.url,
+      hasChecksum: !!dhis2File.checksum,
+      converted: {
+        hasContent: !!converted.content,
+        hasUrl: !!converted.url,
+        hasChecksum: !!converted.checksum
+      }
+    });
+    
+    return converted;
   };
 
   // Convert DHIS2Folder to FileItem
@@ -151,9 +168,15 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     setErrorFiles(null);
     try {
       const fetchedFiles = await dataStoreAPI.getAllFiles();
+      console.log('[DEBUG] refreshFiles - Raw DHIS2 files:', fetchedFiles);
+      
       const convertedFiles = fetchedFiles.map(convertDHIS2FileToFileItem);
+      console.log('[DEBUG] refreshFiles - Converted FileItems:', convertedFiles);
+      
       // Dedupe by id to avoid duplicate React keys
       const unique = Array.from(new Map(convertedFiles.map(f => [f.id, f])).values());
+      console.log('[DEBUG] refreshFiles - Final unique files:', unique);
+      
       setFiles(unique);
     } catch (error) {
       setErrorFiles(error instanceof Error ? error.message : 'Failed to load files');
