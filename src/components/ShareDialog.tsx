@@ -102,12 +102,12 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: 'var(--colors-grey900)' }}>
             Sharing and access: {fileName}
           </h2>
-          <Button 
+          {/* <Button 
             icon={<IconCross24 />} 
             onClick={onClose}
             secondary
             small
-          />
+          /> */}
         </div>
 
         {/* Content */}
@@ -213,7 +213,7 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
 
               {/* Give access button */}
               <Button 
-                primary
+              
                 onClick={addRecipient} 
                 disabled={!selectedUser}
               >

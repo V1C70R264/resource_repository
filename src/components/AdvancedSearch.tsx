@@ -93,7 +93,7 @@ export function AdvancedSearch({
       {/* Filter Button */}
       <div ref={dropdownRef} style={{ position: 'relative' }}>
         <Button
-          {...(hasActiveFilters ? { primary: true } : { primary: true })}
+         // {...(hasActiveFilters ? { primary: true } : { primary: true })}
           onClick={() => setIsOpen(!isOpen)}
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
