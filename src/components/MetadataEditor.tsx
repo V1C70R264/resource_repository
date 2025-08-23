@@ -19,20 +19,6 @@ interface MetadataEditorProps {
   onSave: (metadata: FileMetadata) => void;
 }
 
-const languages = [
-  { code: "en", name: "English" },
-  { code: "es", name: "Spanish" },
-  { code: "fr", name: "French" },
-  { code: "de", name: "German" },
-  { code: "it", name: "Italian" },
-  { code: "pt", name: "Portuguese" },
-  { code: "ru", name: "Russian" },
-  { code: "zh", name: "Chinese" },
-  { code: "ja", name: "Japanese" },
-  { code: "ko", name: "Korean" },
-  { code: "ar", name: "Arabic" },
-  { code: "hi", name: "Hindi" },
-];
 
 const documentTypes = [
   "Document",
@@ -150,8 +136,8 @@ export function MetadataEditor({ file, isOpen, onClose, onSave }: MetadataEditor
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flex: '0 0 auto' }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, fontSize: 16 }}>
-            <IconEdit24 />
-            <span>Edit metadata — {file.name}</span>
+            {/* <IconEdit24 /> */}
+            <span>{file.name}</span>
           </div>
           {!isEditing && (
             <div>
@@ -181,7 +167,7 @@ export function MetadataEditor({ file, isOpen, onClose, onSave }: MetadataEditor
 
               {/* Language / Document type */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
-                <div>
+                {/* <div>
                   <div style={{ fontSize: 12, color: "var(--colors-grey700)", marginBottom: 4 }}>Language</div>
                   <SingleSelect
                     selected={metadata.language || ""}
@@ -193,7 +179,7 @@ export function MetadataEditor({ file, isOpen, onClose, onSave }: MetadataEditor
                       <SingleSelectOption key={lang.code} label={lang.name} value={lang.code} />
                     ))}
                   </SingleSelect>
-                </div>
+                </div> */}
                 <div>
                   <div style={{ fontSize: 12, color: "var(--colors-grey700)", marginBottom: 4 }}>Document type</div>
                   <SingleSelect

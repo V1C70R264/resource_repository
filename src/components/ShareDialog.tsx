@@ -1,10 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
-import { Modal, Button, InputField, SingleSelect, SingleSelectOption, Tag, CircularLoader } from "@dhis2/ui";
-import { IconShare24, IconAdd24, IconCross24 } from "@dhis2/ui-icons";
-import { Permission, User, OrgUnit } from "@/lib/types";
+import { Modal, Button, InputField, SingleSelect, SingleSelectOption } from "@dhis2/ui";
+import { IconCross24, IconUserGroup24} from "@dhis2/ui-icons";
+import { Permission, User } from "@/lib/types";
 import { useDHIS2Alerts } from "./DHIS2Alerts";
 import { useDHIS2DataStore } from "@/hooks/useDHIS2DataStore";
-import { dataStoreAPI } from "@/lib/dhis2-api";
 
 interface ShareDialogProps {
   fileId: string;
@@ -22,13 +21,23 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
   const alerts = useDHIS2Alerts();
   const { refreshUsers } = useDHIS2DataStore();
 
-  type TargetType = 'user' | 'group' | 'role' | 'orgUnit';
-
   const [users, setUsers] = useState<User[]>(usersProp || []);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [permissionType, setPermissionType] = useState<'read' | 'write'>('read');
+  const [pending, setPending] = useState<Array<{ userId: string; permissionType: 'read'|'write' }>>([]);
 
-  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
-  const [orgUnitsLoading, setOrgUnitsLoading] = useState(false);
+  const targetFileIds = (fileIds && fileIds.length > 0) ? fileIds : [fileId];
+
+  // Filter users based on search query
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return users.filter(user => 
+      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [users, searchQuery]);
 
   useEffect(() => {
     const fetchUsersIfNeeded = async () => {
@@ -46,44 +55,12 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
     fetchUsersIfNeeded();
   }, [usersProp, refreshUsers]);
 
-  useEffect(() => {
-    const fetchOrgUnits = async () => {
-      try {
-        setOrgUnitsLoading(true);
-        const ous = await dataStoreAPI.getAllOrgUnits();
-        setOrgUnits(ous.map((o: any) => ({ id: o.id, name: o.displayName || o.name, displayName: o.displayName, level: o.level, parentId: o.parent?.id })));
-      } catch (e) {
-        alerts.critical('Failed to fetch organisation units');
-      } finally {
-        setOrgUnitsLoading(false);
-      }
-    };
-    fetchOrgUnits();
-  }, []);
-
-  const [targetType, setTargetType] = useState<TargetType>('user');
-  const [targetId, setTargetId] = useState<string>('');
-  const [permissionType, setPermissionType] = useState<'read' | 'write' | 'admin'>('read');
-  const [expiry, setExpiry] = useState<string>('');
-  const [pending, setPending] = useState<Array<{ targetType: TargetType; targetId: string; permissionType: 'read'|'write'|'admin'; expiry?: string }>>([]);
-
-  const multiple = (fileIds && fileIds.length > 1) ? true : false;
-  const targetFileIds = (fileIds && fileIds.length > 0) ? fileIds : [fileId];
-
-  const link = useMemo(() => {
-    if (multiple) return '';
-    const base = `${window.location.origin}${window.location.pathname}`;
-    const url = new URL(base);
-    url.searchParams.set('fileId', fileId);
-    return url.toString();
-  }, [fileId, multiple]);
-
   const addRecipient = () => {
-    if (!targetId) return;
-    setPending(prev => [...prev, { targetType, targetId, permissionType, expiry: expiry || undefined }]);
-    setTargetId('');
+    if (!selectedUser) return;
+    setPending(prev => [...prev, { userId: selectedUser, permissionType }]);
+    setSelectedUser('');
     setPermissionType('read');
-    setExpiry('');
+    setSearchQuery('');
   };
 
   const removeRecipient = (idx: number) => {
@@ -91,164 +68,289 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
   };
 
   const handleShare = () => {
-    const entriesSeed = pending.length ? pending : (targetId ? [{ targetType, targetId, permissionType, expiry: expiry || undefined }] : []);
-    if (entriesSeed.length === 0) return;
+    if (pending.length === 0) return;
     const now = new Date().toISOString();
     const entries: Permission[] = [];
     for (const fid of targetFileIds) {
-      for (const entry of entriesSeed) {
+      for (const entry of pending) {
         entries.push({
           id: `perm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
           fileId: fid,
-          userId: entry.targetType === 'user' ? entry.targetId : '',
+          userId: entry.userId,
           type: entry.permissionType,
           grantedBy: 'Current User',
           grantedAt: now,
-          expiresAt: entry.expiry,
-          targetType: entry.targetType,
-          targetId: entry.targetId,
+          targetType: 'user',
+          targetId: entry.userId,
         });
       }
     }
     onShare(entries);
   };
 
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(link);
-      alerts.success('Link copied to clipboard');
-    } catch {
-      alerts.critical('Failed to copy link');
-    }
-  };
-
-  const composeEmail = () => {
-    const ids = [
-      ...pending.filter(p => p.targetType === 'user').map(p => p.targetId),
-      ...(targetType === 'user' && targetId ? [targetId] : [])
-    ];
-    const emails = ids
-      .map(id => users.find(u => u.id === id)?.email)
-      .filter((e): e is string => !!e);
-
-    const subject = encodeURIComponent(`Shared resource: ${fileName}`);
-    const body = encodeURIComponent(`Hi,\n\nI am sharing a resource with you in DHIS2.\n\nTitle: ${fileName}\nLink: ${link}\n\nAccess is granted based on your permissions.`);
-
-    const to = emails.slice(0, 1).join(',');
-    const cc = emails.slice(1).join(',');
-    const mailto = `mailto:${to}?${cc ? `cc=${encodeURIComponent(cc)}&` : ''}subject=${subject}&body=${body}`;
-    window.location.href = mailto;
-  };
-
   return (
     <Modal onClose={onClose} large>
-      <div style={{ padding: 20, maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-            <IconShare24 />
-            <span>Share — {multiple ? `${targetFileIds.length} items` : fileName}</span>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {!multiple && <Button secondary small onClick={copyLink}>Copy link</Button>}
-            {!multiple && <Button secondary small onClick={composeEmail}>Compose email</Button>}
-          </div>
+      <div style={{ padding: 0, maxWidth: 700 }}>
+        {/* Header with close button */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          padding: '24px 24px 0 24px',
+          borderBottom: '1px solid var(--colors-grey300)'
+        }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: 'var(--colors-grey900)' }}>
+            Sharing and access: {fileName}
+          </h2>
+          <Button 
+            icon={<IconCross24 />} 
+            onClick={onClose}
+            secondary
+            small
+          />
         </div>
 
-        {/* Link field */}
-        {!multiple && (
-          <InputField label="Link" value={link} onChange={() => {}} helpText="Recipients must have permission to access." />
-        )}
-
-        {/* Form */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--colors-grey700)', marginBottom: 4 }}>Target type</div>
-            <SingleSelect selected={targetType} onChange={({ selected }) => setTargetType(selected as TargetType)}>
-              <SingleSelectOption label="User" value="user" />
-              <SingleSelectOption label="Group" value="group" />
-              <SingleSelectOption label="Role" value="role" />
-              <SingleSelectOption label="Org unit" value="orgUnit" />
-            </SingleSelect>
-          </div>
-
-          <div style={{ gridColumn: 'span 2' }}>
-            {targetType === 'user' ? (
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--colors-grey700)', marginBottom: 4 }}>User</div>
-                {usersLoading ? (
-                  <div style={{ padding: 8 }}><CircularLoader small /></div>
-                ) : (
-                  <SingleSelect selected={targetId} onChange={({ selected }) => setTargetId(selected)}>
-                    <SingleSelectOption label="Select user" value="" />
-                    {users.map(u => (
-                      <SingleSelectOption key={u.id} label={u.name} value={u.id} />
+        {/* Content */}
+        <div style={{ padding: '24px' }}>
+          {/* Give Access Section */}
+          <div style={{ marginBottom: 32 }}>
+            <h3 style={{ 
+              margin: '0 0 16px 0', 
+              fontSize: 16, 
+              fontWeight: 600, 
+              color: 'var(--colors-grey900)' 
+            }}>
+              Give access to a user or group
+            </h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, alignItems: 'end' }}>
+              {/* User or group search field */}
+              <div style={{ position: 'relative' }}>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: 8, 
+                  fontSize: 14, 
+                  fontWeight: 500,
+                  color: 'var(--colors-grey700)' 
+                }}>
+                  User or group
+                </label>
+                <InputField
+                  value={searchQuery}
+                  onChange={({ value }) => setSearchQuery(value)}
+                  placeholder="Search"
+                  onFocus={() => setSelectedUser('')}
+                />
+                {/* Dropdown with filtered users */}
+                {searchQuery && filteredUsers.length > 0 && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    zIndex: 1000, 
+                    background: 'white', 
+                    border: '1px solid var(--colors-grey300)', 
+                    borderRadius: 4, 
+                    maxHeight: 200, 
+                    overflowY: 'auto',
+                    width: '100%',
+                    marginTop: 4,
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    top: '100%',
+                    left: 0
+                  }}>
+                    {filteredUsers.map(user => (
+                      <div
+                        key={user.id}
+                        style={{
+                          padding: '12px 16px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid var(--colors-grey200)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4
+                        }}
+                        onClick={() => {
+                          setSelectedUser(user.id);
+                          setSearchQuery(user.name);
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'var(--colors-grey050)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'white';
+                        }}
+                      >
+                        <div style={{ fontWeight: 500, color: 'var(--colors-grey900)' }}>{user.name}</div>
+                        {user.email && (
+                          <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>{user.email}</div>
+                        )}
+                      </div>
                     ))}
-                  </SingleSelect>
-                )}
-              </div>
-            ) : targetType === 'orgUnit' ? (
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--colors-grey700)', marginBottom: 4 }}>Organisation unit</div>
-                {orgUnitsLoading ? (
-                  <div style={{ padding: 8 }}><CircularLoader small /></div>
-                ) : (
-                  <SingleSelect selected={targetId} onChange={({ selected }) => setTargetId(selected)}>
-                    <SingleSelectOption label="Select org unit" value="" />
-                    {orgUnits.map(ou => (
-                      <SingleSelectOption key={ou.id} label={ou.name} value={ou.id} />
-                    ))}
-                  </SingleSelect>
-                )}
-              </div>
-            ) : (
-              <InputField label={`Target ID (${targetType})`} value={targetId} onChange={({ value }) => setTargetId(value)} placeholder={`Enter ${targetType} id`} />
-            )}
-          </div>
-
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--colors-grey700)', marginBottom: 4 }}>Permission</div>
-            <SingleSelect selected={permissionType} onChange={({ selected }) => setPermissionType(selected as any)}>
-              <SingleSelectOption label="Can view" value="read" />
-              <SingleSelectOption label="Can edit" value="write" />
-              <SingleSelectOption label="Full access" value="admin" />
-            </SingleSelect>
-          </div>
-
-          <div>
-            <InputField label="Expires (optional)" value={expiry} onChange={({ value }) => setExpiry(value)} placeholder="YYYY-MM-DD" />
-          </div>
-        </div>
-
-        {/* Pending recipients */}
-        {pending.length > 0 && (
-          <div style={{ border: '1px solid var(--colors-grey300)', borderRadius: 8, padding: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Recipients</div>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {pending.map((p, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--colors-grey200)', borderRadius: 6, padding: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Tag>{p.targetType}</Tag>
-                    <div style={{ fontWeight: 600 }}>{p.targetId}</div>
-                    <div><Tag>{p.permissionType}</Tag></div>
-                    {p.expiry && <div style={{ fontSize: 12, color: 'var(--colors-grey700)' }}>expires {p.expiry}</div>}
                   </div>
-                  <Button small secondary onClick={() => removeRecipient(idx)}>
-                    <IconCross24 />
-                  </Button>
-                </div>
-              ))}
+                )}
+              </div>
+
+              {/* Access level dropdown */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  marginBottom: 8, 
+                  fontSize: 14, 
+                  fontWeight: 500,
+                  color: 'var(--colors-grey700)' 
+                }}>
+                  Access level
+                </label>
+                <SingleSelect 
+                  selected={permissionType} 
+                  onChange={({ selected }) => setPermissionType(selected as any)}
+                  placeholder="Choose a level"
+                  clearable={false}
+                >
+                  <SingleSelectOption label="View only" value="read" />
+                  <SingleSelectOption label="View and edit" value="write" />
+                </SingleSelect>
+              </div>
+
+              {/* Give access button */}
+              <Button 
+                primary
+                onClick={addRecipient} 
+                disabled={!selectedUser}
+              >
+                Give access
+              </Button>
             </div>
           </div>
-        )}
 
-        {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Button secondary onClick={addRecipient} disabled={!targetId}><IconAdd24 /> Add</Button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button secondary onClick={onClose}>Cancel</Button>
-            <Button primary onClick={handleShare} disabled={!targetId && pending.length === 0}>Share</Button>
+          {/* Current Access Section */}
+          <div>
+            <h3 style={{ 
+              margin: '0 0 16px 0', 
+              fontSize: 16, 
+              fontWeight: 600, 
+              color: 'var(--colors-grey900)' 
+            }}>
+              Users and groups that currently have access
+            </h3>
+            
+            {pending.length === 0 ? (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12, 
+                border: '1px solid var(--colors-grey300)', 
+                borderRadius: 4, 
+                padding: 16,
+                background: 'var(--colors-grey050)'
+              }}>
+                <div style={{ 
+                  width: 32, 
+                  height: 32, 
+                  borderRadius: '50%', 
+                  background: 'var(--colors-grey200)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  fontSize: 16,
+                  color: 'var(--colors-grey600)'
+                }}>
+                  <IconUserGroup24 />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--colors-grey900)' }}>All users</div>
+                  <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>Anyone logged in</div>
+                </div>
+                <div style={{ marginLeft: 'auto' }}>
+                  <SingleSelect 
+                    selected="no-access" 
+                    onChange={() => {}}
+                    clearable={false}
+                  >
+                    <SingleSelectOption label="No access" value="no-access" />
+                    <SingleSelectOption label="View only" value="view" />
+                    <SingleSelectOption label="View and edit" value="edit" />
+                  </SingleSelect>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {pending.map((entry, idx) => {
+                  const user = users.find(u => u.id === entry.userId);
+                  return (
+                    <div key={idx} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between', 
+                      border: '1px solid var(--colors-grey300)', 
+                      borderRadius: 4, 
+                      padding: 16,
+                      background: 'white'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ 
+                          width: 32, 
+                          height: 32, 
+                          borderRadius: '50%', 
+                          background: 'var(--colors-grey200)', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          fontSize: 12, 
+                          fontWeight: 600,
+                          color: 'var(--colors-grey700)'
+                        }}>
+                          {user ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2) : '—'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--colors-grey900)' }}>
+                            {user?.name || 'Unknown User'}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>
+                            {user?.email || '—'}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <SingleSelect 
+                          selected={entry.permissionType} 
+                          onChange={({ selected }) => {
+                            setPending(prev => prev.map((p, i) => 
+                              i === idx ? { ...p, permissionType: selected as any } : p
+                            ));
+                          }}
+                          clearable={false}
+                        >
+                          <SingleSelectOption label="View only" value="read" />
+                          <SingleSelectOption label="View and edit" value="write" />
+                        </SingleSelect>
+                        
+                        <Button 
+                          small 
+                          secondary 
+                          onClick={() => removeRecipient(idx)}
+                          icon={<IconCross24 />}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end', 
+          gap: 12, 
+          padding: '16px 24px 24px 24px',
+          borderTop: '1px solid var(--colors-grey300)',
+          background: 'var(--colors-grey050)'
+        }}>
+          <Button secondary onClick={onClose}>Close</Button>
+          <Button primary onClick={handleShare} disabled={pending.length === 0}>Share</Button>
         </div>
       </div>
     </Modal>

@@ -170,7 +170,7 @@ export function FileGrid({ items, viewMode, onItemClick, onItemAction, folderChi
               <MenuItem label="Share" onClick={() => { if (menuItem) onItemAction('share', menuItem); closeMenu(); }} />
               <MenuItem label={menuItem?.starred ? 'Remove star' : 'Add star'} onClick={() => { if (menuItem) onItemAction('star', menuItem); closeMenu(); }} />
               <MenuItem label="Edit Metadata" onClick={() => { if (menuItem) onItemAction('metadata', menuItem); closeMenu(); }} />
-              <MenuItem label="Access Control" onClick={() => { if (menuItem) onItemAction('permissions', menuItem); closeMenu(); }} />
+              {/* <MenuItem label="Access Control" onClick={() => { if (menuItem) onItemAction('permissions', menuItem); closeMenu(); }} /> */}
               <MenuItem label="View Audit Log" onClick={() => { if (menuItem) onItemAction('audit', menuItem); closeMenu(); }} />
               {(!menuItem || !canDelete || canDelete(menuItem)) && (
                 <MenuItem destructive label="Delete" onClick={() => { if (menuItem) onItemAction('delete', menuItem); closeMenu(); }} />

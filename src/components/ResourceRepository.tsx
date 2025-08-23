@@ -10,7 +10,7 @@ import { FileUploadDialog } from "./FileUploadDialog";
 import { FolderUploadDialog } from "./FolderUploadDialog";
 import { AdvancedSearch } from "./AdvancedSearch";
 import { AuditLogDialog } from "./AuditLog";
-import { AccessControlDialog } from "./AccessControl";
+// import { AccessControlDialog } from "./AccessControl";
 import { FilePreview } from "./FilePreview";
 import { MetadataEditor } from "./MetadataEditor";
 import { APIStatus } from "./APIStatus";
@@ -1810,7 +1810,7 @@ export function ResourceRepository() {
             onSave={handleMetadataSave}
           />
 
-          <AccessControlDialog
+          {/* <AccessControlDialog
             fileId={selectedFile.id}
             fileName={selectedFile.name}
             permissions={dhis2Permissions}
@@ -1818,7 +1818,7 @@ export function ResourceRepository() {
             isOpen={showAccessControl}
             onClose={() => setShowAccessControl(false)}
             onPermissionChange={handlePermissionChange}
-          />
+          /> */}
         </>
       )}
 

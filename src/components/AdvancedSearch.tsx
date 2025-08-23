@@ -3,7 +3,8 @@ import { Button, Input } from "@dhis2/ui";
 import { 
   IconFilter24,
   IconList24,
-  IconVisualizationColumn24
+  IconVisualizationColumn24,
+  IconApps24
 } from "@dhis2/ui-icons";
 
 import { SearchFilters } from "@/lib/types";
@@ -84,7 +85,7 @@ export function AdvancedSearch({
             onChange={(e) => updateFilters({ query: e.value })}
           />
           {filters.query && (
-            <Button small secondary onClick={() => updateFilters({ query: "" })}>Clear</Button>
+            <Button small primary onClick={() => updateFilters({ query: "" })}>Clear</Button>
           )}
         </div>
       </div>
@@ -92,7 +93,7 @@ export function AdvancedSearch({
       {/* Filter Button */}
       <div ref={dropdownRef} style={{ position: 'relative' }}>
         <Button
-          {...(hasActiveFilters ? { primary: true } : { secondary: true })}
+          {...(hasActiveFilters ? { primary: true } : { primary: true })}
           onClick={() => setIsOpen(!isOpen)}
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
@@ -212,7 +213,7 @@ export function AdvancedSearch({
       {onViewModeChange && viewMode && (
         <div style={{ display: 'flex', border: '1px solid #e1e5e9', borderRadius: '8px', padding: '4px', backgroundColor: '#f8f9fa', marginLeft: '8px' }}>
           <Button {...(viewMode === 'grid' ? { primary: true } : { secondary: true })} onClick={() => onViewModeChange('grid')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
-            <IconVisualizationColumn24 />
+            <IconApps24 />
           </Button>
           <Button {...(viewMode === 'list' ? { primary: true } : { secondary: true })} onClick={() => onViewModeChange('list')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
             <IconList24 />
