@@ -212,10 +212,10 @@ export function AdvancedSearch({
       {/* View Toggle */}
       {onViewModeChange && viewMode && (
         <div style={{ display: 'flex', border: '1px solid #e1e5e9', borderRadius: '8px', padding: '4px', backgroundColor: '#f8f9fa', marginLeft: '8px' }}>
-          <Button {...(viewMode === 'grid' ? { primary: true } : { secondary: true })} onClick={() => onViewModeChange('grid')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
+          <Button {...(viewMode === 'grid' ? { primary: true } : {})} onClick={() => onViewModeChange('grid')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
             <IconApps24 />
           </Button>
-          <Button {...(viewMode === 'list' ? { primary: true } : { secondary: true })} onClick={() => onViewModeChange('list')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
+          <Button {...(viewMode === 'list' ? { primary: true } : {})} onClick={() => onViewModeChange('list')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
             <IconList24 />
           </Button>
         </div>

@@ -1429,13 +1429,13 @@ export function ResourceRepository() {
                 {/* <div className="flex gap-2">
                   <button
                     onClick={() => withBusy(() => refreshFolders())}
-                    className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                    className="px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded border hover:bg-secondary/80"
                   >
                     Refresh Folders
                   </button>
                   <button
                     onClick={() => console.log('Current folders:', dhis2Folders)}
-                    className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
+                    className="px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded border hover:bg-secondary/80"
                   >
                     Log Folders
                   </button>
@@ -1450,7 +1450,7 @@ export function ResourceRepository() {
                         console.error('API Check Error:', error);
                       }
                     }}
-                    className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:bg-purple-600"
+                    className="px-3 py-1 text-sm bg-secondary text-secondary-foreground rounded border hover:bg-secondary/80"
                   >
                     Check API
                   </button>
