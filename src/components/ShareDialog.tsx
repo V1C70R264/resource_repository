@@ -165,7 +165,12 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
             }}>
               Give access to a user or group
             </h3>
-            
+            <div style={{
+              background: 'var(--colors-grey050, #f5f6f8)',
+              border: '1px solid var(--colors-grey300, #d1d5db)',
+              borderRadius: 6,
+              padding: 12
+            }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, alignItems: 'end' }}>
               {/* User or group search field */}
               <div style={{ position: 'relative' }}>
@@ -285,6 +290,7 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                 Give access
               </Button>
             </div>
+            </div>
           </div>
 
           {/* Current Access Section */}
@@ -338,6 +344,22 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                 </div>
               </div>
             ) : (
+              <>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '8px 12px',
+                background: 'var(--colors-grey050, #f5f6f8)',
+                border: '1px solid var(--colors-grey300, #d1d5db)',
+                borderRadius: 4,
+                color: 'var(--colors-grey800, #1f2937)',
+                fontSize: 13,
+                marginBottom: 8
+              }}>
+                <span style={{ fontWeight: 500 }}>User / Group</span>
+                <span style={{ fontWeight: 500 }}>Access level</span>
+              </div>
               <div style={{ 
                 display: 'grid', 
                 gap: 8, 
@@ -418,6 +440,7 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                   );
                 })}
               </div>
+              </>
             )}
           </div>
         </div>
