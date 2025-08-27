@@ -1,15 +1,20 @@
 import { useState, useEffect } from "react";
-import { X, Download, Share, Edit, ZoomIn, ZoomOut, RotateCw, FileText, Image, Video, Music, Archive } from "lucide-react";
 import { 
   Modal, 
   Button, 
-  Tag, 
   TabBar, 
   Tab, 
   NoticeBox,
   CircularLoader
 } from '@dhis2/ui';
-import { IconCross24, IconDownload24, IconShare24, IconEdit24 } from '@dhis2/ui-icons';
+import { 
+  IconCross24, 
+  IconDownload24, 
+  IconShare24, 
+  IconEdit24, 
+  IconFileDocument24,
+  IconImage24
+} from '@dhis2/ui-icons';
 import { PreviewData } from "@/lib/types";
 import { getAuthHeaders } from "@/config/dhis2";
 
@@ -144,15 +149,18 @@ export function FilePreview({
                  file.mimeType === "application/json" ||
                  file.mimeType === "application/xml";
 
-  const getFileIcon = () => {
-    if (isImage) return Image;
-    if (isVideo) return Video;
-    if (isAudio) return Music;
-    if (isWord || isExcel) return FileText;
-    return FileText;
+  const getTypeBadge = (): { label: string; background: string; color: string } => {
+    if (isImage) return { label: 'I', background: 'var(--colors-blue050, #e6f0ff)', color: 'var(--colors-blue800, #1e3a8a)' };
+    if (isVideo) return { label: 'V', background: 'var(--colors-purple050, #efe7ff)', color: 'var(--colors-purple800, #5b21b6)' };
+    if (isAudio) return { label: 'A', background: 'var(--colors-teal050, #e6fffb)', color: 'var(--colors-teal800, #115e59)' };
+    if (isPDF) return { label: 'P', background: 'var(--colors-red050, #fee2e2)', color: 'var(--colors-red800, #991b1b)' };
+    if (isWord) return { label: 'D', background: 'var(--colors-grey050, #f5f6f8)', color: 'var(--colors-grey800, #1f2937)' };
+    if (isExcel) return { label: 'S', background: 'var(--colors-green050, #e8f5e9)', color: 'var(--colors-green800, #1b5e20)' };
+    if (isText) return { label: 'T', background: 'var(--colors-grey050, #f5f6f8)', color: 'var(--colors-grey800, #1f2937)' };
+    return { label: 'F', background: 'var(--colors-grey050, #f5f6f8)', color: 'var(--colors-grey800, #1f2937)' };
   };
 
-  const FileIcon = getFileIcon();
+  // Removed non-DHIS icons; keep UI minimal without file-type iconography
 
   const handleZoomIn = () => setZoom(Math.min(zoom + 25, 200));
   const handleZoomOut = () => setZoom(Math.max(zoom - 25, 25));
@@ -346,7 +354,7 @@ export function FilePreview({
         textAlign: 'center',
         minHeight: '400px'
       }}>
-        <FileIcon style={{ width: '64px', height: '64px', color: '#6c757d', marginBottom: '16px' }} />
+        <div style={{ width: 64, height: 64, borderRadius: 8, background: 'var(--colors-grey100, #eef2f7)', border: '1px solid var(--colors-grey300, #d1d5db)', marginBottom: 16 }} />
         <h3 style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>{file.fileName}</h3>
         <p style={{ color: '#6c757d', marginBottom: '16px' }}>
           In-app preview not available for this file type
@@ -398,20 +406,11 @@ export function FilePreview({
           paddingBottom: '16px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <FileIcon style={{ width: '20px', height: '20px' }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isImage ? <IconImage24 /> : <IconFileDocument24 />}
+            </span>
             <div>
               <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>{file.fileName}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#6c757d', marginTop: '4px' }}>
-                <Tag>{file.fileType}</Tag>
-                <span>•</span>
-                <span>{file.mimeType}</span>
-                {(isWord || isExcel || isPDF) && (
-                  <>
-                    <span>•</span>
-                    <span style={{ color: '#28a745', fontWeight: '500' }}>In-App Preview</span>
-                  </>
-                )}
-              </div>
             </div>
           </div>
 
@@ -425,7 +424,7 @@ export function FilePreview({
                   disabled={zoom <= 25}
                   style={{ height: '32px', width: '32px', padding: 0 }}
                 >
-                  <ZoomOut style={{ width: '16px', height: '16px' }} />
+                  −
                 </Button>
                 <span style={{ fontSize: '14px', padding: '0 8px' }}>{zoom}%</span>
                 <Button
@@ -435,7 +434,7 @@ export function FilePreview({
                   disabled={zoom >= 200}
                   style={{ height: '32px', width: '32px', padding: 0 }}
                 >
-                  <ZoomIn style={{ width: '16px', height: '16px' }} />
+                  +
                 </Button>
               </div>
             )}
@@ -445,9 +444,9 @@ export function FilePreview({
                 secondary
                 small
                 onClick={handleRotate}
-                style={{ height: '32px', width: '32px', padding: 0 }}
+                style={{ height: '32px', padding: '0 8px' }}
               >
-                <RotateCw style={{ width: '16px', height: '16px' }} />
+                Rotate
               </Button>
             )}
 
