@@ -600,6 +600,23 @@ export function ResourceRepository() {
               throw new Error('No previewable content found for this file. The file may need to be re-uploaded.');
             }
 
+            // Determine if current user can edit: owner or has explicit write/admin permission
+            const isOwner = (currentUser?.id || DHIS2_CONFIG.USERNAME) === item.owner;
+            const hasWrite = dhis2Permissions.some(p => {
+              if (p.fileId !== item.id) return false;
+              if (!(p.type === 'write' || p.type === 'admin')) return false;
+              if (!currentUser) {
+                const fallbackId = DHIS2_CONFIG.USERNAME;
+                return p.userId === fallbackId || p.targetId === fallbackId;
+              }
+              if (p.userId && p.userId === currentUser.id) return true;
+              if ((p.targetType === undefined || p.targetType === 'user') && p.targetId === currentUser.id) return true;
+              if (p.targetType === 'group' && p.targetId && currentUser.groupIds.has(p.targetId)) return true;
+              if (p.targetType === 'role' && p.targetId && currentUser.roleIds.has(p.targetId)) return true;
+              if (p.targetType === 'orgUnit' && p.targetId && currentUser.orgUnitIds.has(p.targetId)) return true;
+              return false;
+            });
+
             const previewData: PreviewData = {
               fileId: item.id,
               fileName: item.name,
@@ -608,7 +625,7 @@ export function ResourceRepository() {
               url: previewUrl,
               content: item.content || dhis2File?.content,
               thumbnail: item.thumbnail,
-              canEdit: true,
+              canEdit: isOwner || hasWrite,
             };
             setPreviewFile(previewData);
             setShowPreview(true);
