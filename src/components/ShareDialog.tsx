@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { Modal, Button, InputField, SingleSelect, SingleSelectOption } from "@dhis2/ui";
-import { IconCross24, IconUserGroup24} from "@dhis2/ui-icons";
+import { Modal, Button, InputField, SingleSelect, SingleSelectOption, DropdownButton, MenuItem, SingleSelectField } from "@dhis2/ui";
+import { IconCross24, IconUserGroup24, IconUser24, IconLocation24 } from "@dhis2/ui-icons";
 import { Permission, User } from "@/lib/types";
 import { useDHIS2Alerts } from "./DHIS2Alerts";
 import { useDHIS2DataStore } from "@/hooks/useDHIS2DataStore";
@@ -19,45 +19,81 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
   if (!isOpen) return null;
 
   const alerts = useDHIS2Alerts();
-  const { refreshUsers } = useDHIS2DataStore();
+  const { refreshUsers, refreshOrgUnits, refreshUserGroups, orgUnits, userGroups } = useDHIS2DataStore();
 
   const [users, setUsers] = useState<User[]>(usersProp || []);
   const [usersLoading, setUsersLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [permissionType, setPermissionType] = useState<'read' | 'write'>('read');
-  const [pending, setPending] = useState<Array<{ userId: string; permissionType: 'read'|'write' }>>([]);
+  const [pending, setPending] = useState<Array<{ 
+    id: string; 
+    type: 'user' | 'orgUnit' | 'group'; 
+    permissionType: 'read'|'write' 
+  }>>([]);
 
   const targetFileIds = (fileIds && fileIds.length > 0) ? fileIds : [fileId];
 
-  // Filter users based on search query
-  const filteredUsers = useMemo(() => {
+  // Filter users, organization units, and groups based on search query
+  const filteredResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    return users.filter(user => 
+    
+    const results = [];
+    
+    // Filter users
+    const filteredUsers = users.filter(user => 
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [users, searchQuery]);
+    results.push(...filteredUsers.map(user => ({ ...user, type: 'user' as const })));
+    
+    // Filter organization units
+    const filteredOrgUnits = orgUnits.filter(orgUnit => 
+      orgUnit.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      orgUnit.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    results.push(...filteredOrgUnits.map(orgUnit => ({ ...orgUnit, type: 'orgUnit' as const })));
+    
+    // Filter user groups
+    const filteredGroups = userGroups.filter(group => 
+      group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      group.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    results.push(...filteredGroups.map(group => ({ ...group, type: 'group' as const })));
+    
+    return results;
+  }, [users, orgUnits, userGroups, searchQuery]);
 
   useEffect(() => {
-    const fetchUsersIfNeeded = async () => {
-      if (!usersProp || usersProp.length === 0) {
-        try {
-          setUsersLoading(true);
-          await refreshUsers();
-        } catch (e) {
-          alerts.critical('Failed to fetch users');
-        } finally {
-          setUsersLoading(false);
-        }
+    const fetchDataIfNeeded = async () => {
+      try {
+        setUsersLoading(true);
+        await Promise.all([
+          refreshUsers(),
+          refreshOrgUnits(),
+          refreshUserGroups()
+        ]);
+      } catch (e) {
+        alerts.critical('Failed to fetch data');
+      } finally {
+        setUsersLoading(false);
       }
     };
-    fetchUsersIfNeeded();
-  }, [usersProp, refreshUsers]);
+    fetchDataIfNeeded();
+  }, [refreshUsers, refreshOrgUnits, refreshUserGroups]);
 
   const addRecipient = () => {
     if (!selectedUser) return;
-    setPending(prev => [...prev, { userId: selectedUser, permissionType }]);
+    
+    // Find the selected item to determine its type
+    const selectedItem = filteredResults.find(item => item.id === selectedUser);
+    if (!selectedItem) return;
+    
+    setPending(prev => [...prev, { 
+      id: selectedUser, 
+      type: selectedItem.type, 
+      permissionType 
+    }]);
     setSelectedUser('');
     setPermissionType('read');
     setSearchQuery('');
@@ -76,16 +112,23 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
         entries.push({
           id: `perm_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
           fileId: fid,
-          userId: entry.userId,
+          userId: entry.type === 'user' ? entry.id : '', // Keep for backward compatibility
           type: entry.permissionType,
           grantedBy: 'Current User',
           grantedAt: now,
-          targetType: 'user',
-          targetId: entry.userId,
+          targetType: entry.type === 'user' ? 'user' : entry.type === 'orgUnit' ? 'orgUnit' : 'group',
+          targetId: entry.id,
         });
       }
     }
     onShare(entries);
+  };
+
+  const getInitials = (name?: string): string => {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/).slice(0, 2);
+    const initials = parts.map(p => p.charAt(0).toUpperCase()).join('');
+    return initials || name.slice(0, 2).toUpperCase();
   };
 
   return (
@@ -141,8 +184,8 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                   placeholder="Search"
                   onFocus={() => setSelectedUser('')}
                 />
-                {/* Dropdown with filtered users */}
-                {searchQuery && filteredUsers.length > 0 && (
+                {/* Dropdown with filtered results */}
+                {searchQuery && filteredResults.length > 0 && (
                   <div style={{ 
                     position: 'absolute', 
                     zIndex: 1000, 
@@ -157,9 +200,9 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                     top: '100%',
                     left: 0
                   }}>
-                    {filteredUsers.map(user => (
+                    {filteredResults.map(result => (
                       <div
-                        key={user.id}
+                        key={result.id}
                         style={{
                           padding: '12px 16px',
                           cursor: 'pointer',
@@ -169,8 +212,8 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                           gap: 4
                         }}
                         onClick={() => {
-                          setSelectedUser(user.id);
-                          setSearchQuery(user.name);
+                          setSelectedUser(result.id);
+                          setSearchQuery(result.name);
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = 'var(--colors-grey050)';
@@ -179,9 +222,27 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                           e.currentTarget.style.background = 'white';
                         }}
                       >
-                        <div style={{ fontWeight: 500, color: 'var(--colors-grey900)' }}>{user.name}</div>
-                        {user.email && (
-                          <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>{user.email}</div>
+                        <div style={{ fontWeight: 500, color: 'var(--colors-grey900)' }}>
+                          {result.name}
+                          {result.type !== 'user' && (
+                            <span style={{ 
+                              fontSize: 11, 
+                              color: 'var(--colors-grey500)', 
+                              marginLeft: 8,
+                              fontWeight: 400 
+                            }}>
+                              ({result.type === 'orgUnit' ? 'Organization Unit' : 'User Group'})
+                            </span>
+                          )}
+                        </div>
+                        {result.email && (
+                          <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>{result.email}</div>
+                        )}
+                        {result.type === 'orgUnit' && result.level && (
+                          <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>Level {result.level}</div>
+                        )}
+                        {result.type === 'group' && result.description && (
+                          <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>{result.description}</div>
                         )}
                       </div>
                     ))}
@@ -200,15 +261,19 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                 }}>
                   Access level
                 </label>
-                <SingleSelect 
-                  selected={permissionType} 
+                <SingleSelectField 
+                  // clearable={true}
+                  selected={permissionType}
                   onChange={({ selected }) => setPermissionType(selected as any)}
                   placeholder="Choose a level"
-                  clearable={false}
+                  prefix='Access to'
+                  // clearable={true}
+                
                 >
                   <SingleSelectOption label="View only" value="read" />
                   <SingleSelectOption label="View and edit" value="write" />
-                </SingleSelect>
+
+                </SingleSelectField>
               </div>
 
               {/* Give access button */}
@@ -273,9 +338,24 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ 
+                display: 'grid', 
+                gap: 8, 
+                maxHeight: 200, 
+                overflowY: 'auto',
+                paddingRight: 4
+              }}>
                 {pending.map((entry, idx) => {
-                  const user = users.find(u => u.id === entry.userId);
+                  // Find the item based on its type
+                  let item: any = null;
+                  if (entry.type === 'user') {
+                    item = users.find(u => u.id === entry.id);
+                  } else if (entry.type === 'orgUnit') {
+                    item = orgUnits.find(o => o.id === entry.id);
+                  } else if (entry.type === 'group') {
+                    item = userGroups.find(g => g.id === entry.id);
+                  }
+                  
                   return (
                     <div key={idx} style={{ 
                       display: 'flex', 
@@ -283,36 +363,39 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                       justifyContent: 'space-between', 
                       border: '1px solid var(--colors-grey300)', 
                       borderRadius: 4, 
-                      padding: 16,
+                      padding: 12,
                       background: 'white'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ 
-                          width: 32, 
-                          height: 32, 
+                          width: 28, 
+                          height: 28, 
                           borderRadius: '50%', 
-                          background: 'var(--colors-grey200)', 
+                          background: 'var(--colors-grey400, #9aa4b2)', 
                           display: 'flex', 
                           alignItems: 'center', 
-                          justifyContent: 'center', 
-                          fontSize: 12, 
-                          fontWeight: 600,
-                          color: 'var(--colors-grey700)'
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          border: '1px solid var(--colors-grey300, #d1d5db)'
                         }}>
-                          {user ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2) : '—'}
+                          {getInitials(item?.name) ? getInitials(item?.name) : <IconUser24 />}
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, color: 'var(--colors-grey900)' }}>
-                            {user?.name || 'Unknown User'}
+                            {item?.name || 'Unknown Item'}
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--colors-grey600)' }}>
-                            {user?.email || '—'}
+                            {item?.id}
                           </div>
                         </div>
                       </div>
                       
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {/* <Button small secondary>Metadata</Button> */}
                         <SingleSelect 
+                        prefix='Metadata'
                           selected={entry.permissionType} 
                           onChange={({ selected }) => {
                             setPending(prev => prev.map((p, i) => 
@@ -324,13 +407,12 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                           <SingleSelectOption label="View only" value="read" />
                           <SingleSelectOption label="View and edit" value="write" />
                         </SingleSelect>
-                        
-                        <Button 
+                        {/* <Button 
                           small 
                           secondary 
                           onClick={() => removeRecipient(idx)}
                           icon={<IconCross24 />}
-                        />
+                        /> */}
                       </div>
                     </div>
                   );

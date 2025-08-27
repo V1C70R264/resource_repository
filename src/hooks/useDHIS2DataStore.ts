@@ -30,6 +30,18 @@ interface UseDHIS2DataStoreReturn {
   saveUser: (user: User) => Promise<boolean>;
   refreshUsers: () => Promise<void>;
 
+  // Organization Units
+  orgUnits: any[];
+  loadingOrgUnits: boolean;
+  errorOrgUnits: string | null;
+  refreshOrgUnits: () => Promise<void>;
+
+  // User Groups
+  userGroups: any[];
+  loadingUserGroups: boolean;
+  errorUserGroups: string | null;
+  refreshUserGroups: () => Promise<void>;
+
   // Audit Logs
   auditLogs: AuditLog[];
   loadingAuditLogs: boolean;
@@ -76,6 +88,16 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [errorUsers, setErrorUsers] = useState<string | null>(null);
+
+  // State for organization units
+  const [orgUnits, setOrgUnits] = useState<any[]>([]);
+  const [loadingOrgUnits, setLoadingOrgUnits] = useState(false);
+  const [errorOrgUnits, setErrorOrgUnits] = useState<string | null>(null);
+
+  // State for user groups
+  const [userGroups, setUserGroups] = useState<any[]>([]);
+  const [loadingUserGroups, setLoadingUserGroups] = useState(false);
+  const [errorUserGroups, setErrorUserGroups] = useState<string | null>(null);
 
   // State for audit logs
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -425,6 +447,34 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     }
   }, []);
 
+  // Organization Unit operations
+  const refreshOrgUnits = useCallback(async () => {
+    setLoadingOrgUnits(true);
+    setErrorOrgUnits(null);
+    try {
+      const fetchedOrgUnits = await dataStoreAPI.getAllOrgUnits();
+      setOrgUnits(fetchedOrgUnits);
+    } catch (error) {
+      setErrorOrgUnits(error instanceof Error ? error.message : 'Failed to load organization units');
+    } finally {
+      setLoadingOrgUnits(false);
+    }
+  }, []);
+
+  // User Group operations
+  const refreshUserGroups = useCallback(async () => {
+    setLoadingUserGroups(true);
+    setErrorUserGroups(null);
+    try {
+      const fetchedUserGroups = await dataStoreAPI.getAllUserGroups();
+      setUserGroups(fetchedUserGroups);
+    } catch (error) {
+      setErrorUserGroups(error instanceof Error ? error.message : 'Failed to load user groups');
+    } finally {
+      setLoadingUserGroups(false);
+    }
+  }, []);
+
   const saveUser = useCallback(async (user: User): Promise<boolean> => {
     try {
       const success = await dataStoreAPI.saveUser(user);
@@ -541,6 +591,8 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
         refreshFiles(),
         refreshFolders(),
         refreshUsers(),
+        refreshOrgUnits(),
+        refreshUserGroups(),
         refreshAuditLogs(),
         refreshPermissions(),
         refreshSettings(),
@@ -548,7 +600,7 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     } catch (error) {
       console.error('Error initializing data:', error);
     }
-  }, [refreshFiles, refreshFolders, refreshUsers, refreshAuditLogs, refreshPermissions, refreshSettings]);
+  }, [refreshFiles, refreshFolders, refreshUsers, refreshOrgUnits, refreshUserGroups, refreshAuditLogs, refreshPermissions, refreshSettings]);
 
   // Load initial data
   useEffect(() => {
@@ -556,8 +608,8 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
   }, [initializeData]);
 
   // Computed values
-  const isLoading = loadingFiles || loadingFolders || loadingUsers || loadingAuditLogs || loadingPermissions || loadingSettings;
-  const hasError = !!(errorFiles || errorFolders || errorUsers || errorAuditLogs || errorPermissions || errorSettings);
+  const isLoading = loadingFiles || loadingFolders || loadingUsers || loadingOrgUnits || loadingUserGroups || loadingAuditLogs || loadingPermissions || loadingSettings;
+  const hasError = !!(errorFiles || errorFolders || errorUsers || errorOrgUnits || errorUserGroups || errorAuditLogs || errorPermissions || errorSettings);
 
   return {
     // Files
@@ -585,6 +637,18 @@ export const useDHIS2DataStore = (): UseDHIS2DataStoreReturn => {
     errorUsers,
     saveUser,
     refreshUsers,
+
+    // Organization Units
+    orgUnits,
+    loadingOrgUnits,
+    errorOrgUnits,
+    refreshOrgUnits,
+
+    // User Groups
+    userGroups,
+    loadingUserGroups,
+    errorUserGroups,
+    refreshUserGroups,
 
     // Audit Logs
     auditLogs,

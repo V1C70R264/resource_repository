@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Upload, Clock, Shield, Tag } from "lucide-react";
-import { NoticeBox, Button, CircularLoader, Modal } from '@dhis2/ui'
+import { NoticeBox, Button, CircularLoader, Modal, Card } from '@dhis2/ui'
 import { IconUpload24, IconFolder24, IconChevronRight16, IconHome24 } from '@dhis2/ui-icons'
-import { DHIS2Card } from "@/components/ui/dhis2-components";
 import { Sidebar } from "./Sidebar";
 import { FileGrid } from "./FileGrid";
 import { NewFolderDialog } from "./NewFolderDialog";
@@ -1400,13 +1398,13 @@ export function ResourceRepository() {
             <div className="mb-6">
               {isDragOver && (
                 <div className="fixed inset-0 bg-drive-blue/10 backdrop-blur-sm z-50 flex items-center justify-center">
-                  <DHIS2Card className="border-2 border-dashed border-drive-blue p-8 text-center w-96 h-64">
-                    <Upload className="w-16 h-16 text-drive-blue mx-auto mb-4" />
+                  <Card className="border-2 border-dashed border-drive-blue p-8 text-center w-96 h-64">
+                    <IconUpload24 />
                     <h3 className="text-xl font-semibold mb-2">Drop files here</h3>
                     <p className="text-muted-foreground">
                       Upload files to {getCurrentFolderName()}
                     </p>
-                  </DHIS2Card>
+                  </Card>
                 </div>
               )}
               

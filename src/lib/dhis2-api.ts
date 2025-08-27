@@ -964,6 +964,23 @@ export class DHIS2DataStoreAPI {
     }
   }
 
+  // User Groups
+  async getAllUserGroups(): Promise<Array<{ id: string; name: string; displayName?: string; description?: string }>> {
+    try {
+      const fields = 'id,name,displayName,description';
+      const url = getApiUrl(`/userGroups.json?fields=${encodeURIComponent(fields)}&paging=false`);
+      const res = await fetch(url, { headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        return data.userGroups || [];
+      }
+      return [];
+    } catch (e) {
+      console.warn('[API DEBUG] getAllUserGroups failed', e);
+      return [];
+    }
+  }
+
   // Audit Logging
   async saveAuditLog(log: any): Promise<boolean> {
     const key = `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
