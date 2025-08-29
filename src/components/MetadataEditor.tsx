@@ -95,8 +95,10 @@ export function MetadataEditor({ file, isOpen, onClose, onSave }: MetadataEditor
       return;
     }
 
+    // Preserve all existing file data and only update metadata fields
     const updated: FileMetadata = {
-      ...metadata,
+      ...file, // Keep all original fields including content, url, mimeType, etc.
+      ...metadata, // Override with edited metadata
       modified: new Date().toISOString(),
     };
 
