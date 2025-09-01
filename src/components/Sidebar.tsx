@@ -67,7 +67,7 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
               />
             </>
           }
-          secondary
+          primary
           icon={<IconAdd24 />}
         >
           New
@@ -84,13 +84,15 @@ export function Sidebar({ activeSection, onSectionChange, onNewFolderClick, onFi
             return (
               <li key={item.id} style={{ marginBottom: '6px' }}>
                 <Button
-                  {...(isActive ? { primary: true } : {})}
+                  secondary
                   onClick={() => onSectionChange(item.id)}
                   style={{
                     width: '100%',
                     justifyContent: 'flex-start',
                     gap: '10px',
                     padding: '0 10px',
+                    backgroundColor: isActive ? '#e3f2fd' : 'transparent',
+                    borderColor: isActive ? '#90caf9' : 'transparent',
                   }}
                 >
                   <Icon />

@@ -3,7 +3,6 @@ import { Button, Input } from "@dhis2/ui";
 import { 
   IconFilter24,
   IconList24,
-  IconVisualizationColumn24,
   IconApps24
 } from "@dhis2/ui-icons";
 
@@ -84,9 +83,9 @@ export function AdvancedSearch({
             value={filters.query}
             onChange={(e) => updateFilters({ query: e.value })}
           />
-          {filters.query && (
+          {/* {filters.query && (
             <Button small primary onClick={() => updateFilters({ query: "" })}>Clear</Button>
-          )}
+          )} */}
         </div>
       </div>
 
@@ -211,13 +210,39 @@ export function AdvancedSearch({
 
       {/* View Toggle */}
       {onViewModeChange && viewMode && (
-        <div style={{ display: 'flex', border: '1px solid #e1e5e9', borderRadius: '8px', padding: '4px', backgroundColor: '#f8f9fa', marginLeft: '8px' }}>
-          <Button {...(viewMode === 'grid' ? { primary: true } : {})} onClick={() => onViewModeChange('grid')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
-            <IconApps24 />
-          </Button>
-          <Button {...(viewMode === 'list' ? { primary: true } : {})} onClick={() => onViewModeChange('list')} style={{ height: '32px', width: '32px', padding: 0, minWidth: '32px' }}>
-            <IconList24 />
-          </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #c4c9d0', borderRadius: '3px', padding: '6px 8px', backgroundColor: '#f8f9fa', marginLeft: '8px', height: '36px', boxSizing: 'border-box' }}>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={() => onViewModeChange('grid')}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onViewModeChange('grid') }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+            title="Grid view"
+            aria-pressed={viewMode === 'grid'}
+          >
+            <IconApps24 color={viewMode === 'grid' ? '#0a6eb4' : '#888'} />
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={() => onViewModeChange('list')}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onViewModeChange('list') }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+            title="List view"
+            aria-pressed={viewMode === 'list'}
+          >
+            <IconList24 color={viewMode === 'list' ? '#0a6eb4' : '#888'} />
+          </span>
         </div>
       )}
     </div>
