@@ -267,23 +267,21 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                   Access level
                 </label>
                 <SingleSelectField 
+                  className="no-caret"
                   // clearable={true}
                   selected={permissionType}
                   onChange={({ selected }) => setPermissionType(selected as any)}
                   placeholder="Choose a level"
                   prefix='Access to'
                   // clearable={true}
-                
                 >
                   <SingleSelectOption label="View only" value="read" />
                   <SingleSelectOption label="View and edit" value="write" />
-
                 </SingleSelectField>
               </div>
 
               {/* Give access button */}
               <Button 
-              
                 onClick={addRecipient} 
                 disabled={!selectedUser}
               >
@@ -333,6 +331,7 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                 </div>
                 <div style={{ marginLeft: 'auto' }}>
                   <SingleSelect 
+                    className="no-caret"
                     selected="no-access" 
                     onChange={() => {}}
                     clearable={false}
@@ -417,7 +416,8 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {/* <Button small secondary>Metadata</Button> */}
                         <SingleSelect 
-                        prefix='Metadata'
+                          className="no-caret"
+                          prefix='Metadata'
                           selected={entry.permissionType} 
                           onChange={({ selected }) => {
                             setPending(prev => prev.map((p, i) => 

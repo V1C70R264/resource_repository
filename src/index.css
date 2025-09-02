@@ -102,6 +102,11 @@
   }
 }
 
+/* Hide caret for select elements when .no-caret is applied */
+.no-caret svg {
+  display: none !important;
+}
+
 /* DHIS2 Typography - Following official guidelines */
 @layer base {
   * {
