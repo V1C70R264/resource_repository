@@ -5,7 +5,8 @@ import {
   TabBar, 
   Tab, 
   NoticeBox,
-  CircularLoader
+  CircularLoader,
+  Chip
 } from '@dhis2/ui';
 import { 
   IconCross24, 
@@ -47,6 +48,9 @@ export function FilePreview({
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [fileAuditLogs, setFileAuditLogs] = useState<any[]>([]);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
+  const [auditDateFrom, setAuditDateFrom] = useState<string>('');
+  const [auditDateTo, setAuditDateTo] = useState<string>('');
 
   // Normalize DHIS2 fileResources URLs to relative paths for same-origin auth
   const normalizeUrl = (url: string): string => {
@@ -112,6 +116,47 @@ export function FilePreview({
     } finally {
       setAuditLogsLoading(false);
     }
+  };
+
+  // Export current (filtered) audit table to a printable page (users can Save as PDF)
+  const exportAuditPdf = () => {
+    try {
+      const filtered = fileAuditLogs.filter((log: any) => {
+        const actionOk = auditActionFilter === 'all' || log.action === auditActionFilter;
+        const ts = new Date(log.timestamp).getTime();
+        const fromOk = !auditDateFrom || ts >= new Date(auditDateFrom).getTime();
+        const toOk = !auditDateTo || ts <= new Date(auditDateTo).getTime() + 24 * 60 * 60 * 1000 - 1;
+        return actionOk && fromOk && toOk;
+      });
+      const htmlRows = filtered.map((l: any) => {
+        const date = new Date(l.timestamp).toLocaleString();
+        return `<tr>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-transform:uppercase">${(l.action||'')}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb">${(l.userName||'')}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#6b7280">${date}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#6b7280">${(l.details||'-')}</td>
+        </tr>`;
+      }).join('');
+      const title = `Audit log for ${file.fileName}`;
+      const html = `<!doctype html><html><head><meta charset=\"utf-8\"><title>${title}</title>
+        <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;color:#111827}
+        h1{font-size:18px;margin:0 0 16px 0}
+        table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb}
+        thead td{background:#f3f4f6;font-weight:600;color:#6b7280;padding:10px;border-bottom:1px solid #e5e7eb}
+        </style></head><body>
+        <h1>${title}</h1>
+        <div style=\"font-size:12px;color:#6b7280;margin-bottom:8px\">${auditActionFilter !== 'all' ? `Activity: ${auditActionFilter.toUpperCase()} • ` : ''}${auditDateFrom ? `From: ${auditDateFrom} ` : ''}${auditDateTo ? `To: ${auditDateTo}` : ''}</div>
+        <table><thead><tr>
+        <td>Activity</td><td>User</td><td>Date</td><td>Details</td>
+        </tr></thead><tbody>${htmlRows}</tbody></table>
+        <script>window.onload = () => setTimeout(() => window.print(), 0)</script>
+        </body></html>`;
+      const w = window.open('about:blank', '_blank');
+      if (!w) return;
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+    } catch {}
   };
 
   // Prefetch secured URLs with auth and convert to blob URL for media
@@ -445,110 +490,147 @@ export function FilePreview({
         flexDirection: 'column'
       }}>
         {/* Header */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          marginBottom: '16px',
-          borderBottom: '1px solid #e1e5e9',
-          paddingBottom: '16px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isImage ? <IconImage24 /> : <IconFileDocument24 />}
-            </span>
+        {activeTab === 'audit' ? (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            borderBottom: '1px solid #e1e5e9',
+            paddingBottom: '16px'
+          }}>
             <div>
-              <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>{file.fileName}</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>Audit log for {file.fileName}</h2>
             </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {(isImage || isVideo) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #e1e5e9', borderRadius: '8px', padding: '4px' }}>
-                <Button
-                  secondary
-                  small
-                  onClick={handleZoomOut}
-                  disabled={zoom <= 25}
-                  style={{ height: '32px', width: '32px', padding: 0 }}
+            <div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button 
+                  secondary 
+                  small 
+                  onClick={loadFileAuditLogs}
+                  disabled={auditLogsLoading}
                 >
-                  −
+                  Refresh
                 </Button>
-                <span style={{ fontSize: '14px', padding: '0 8px' }}>{zoom}%</span>
-                <Button
-                  secondary
-                  small
-                  onClick={handleZoomIn}
-                  disabled={zoom >= 200}
-                  style={{ height: '32px', width: '32px', padding: 0 }}
+                <Button 
+                  secondary 
+                  small 
+                  onClick={exportAuditPdf}
+                  disabled={auditLogsLoading}
                 >
-                  +
+                  Download PDF
                 </Button>
               </div>
-            )}
-
-            {isImage && (
-              <Button
-                secondary
-                small
-                onClick={handleRotate}
-                style={{ height: '32px', padding: '0 8px' }}
-              >
-                Rotate
-              </Button>
-            )}
-
-            {(isImage || isVideo) && (
-              <Button
-                secondary
-                small
-                onClick={handleReset}
-                style={{ height: '32px', padding: '0 8px' }}
-              >
-                Reset
-              </Button>
-            )}
-
-            <Button secondary small onClick={onDownload}>
-              <IconDownload24 />
-            </Button>
-            <Button secondary small onClick={onShare}>
-              <IconShare24 />
-            </Button>
-            {file.canEdit && (
-              <Button secondary small onClick={onEdit}>
-                <IconEdit24 />
-              </Button>
-            )}
-            <Button secondary small onClick={onClose}>
-              <IconCross24 />
-            </Button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            borderBottom: '1px solid #e1e5e9',
+            paddingBottom: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                {isImage ? <IconImage24 /> : <IconFileDocument24 />}
+              </span>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>{file.fileName}</h2>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {(isImage || isVideo) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #e1e5e9', borderRadius: '8px', padding: '4px' }}>
+                  <Button
+                    secondary
+                    small
+                    onClick={handleZoomOut}
+                    disabled={zoom <= 25}
+                    style={{ height: '32px', width: '32px', padding: 0 }}
+                  >
+                    −
+                  </Button>
+                  <span style={{ fontSize: '14px', padding: '0 8px' }}>{zoom}%</span>
+                  <Button
+                    secondary
+                    small
+                    onClick={handleZoomIn}
+                    disabled={zoom >= 200}
+                    style={{ height: '32px', width: '32px', padding: 0 }}
+                  >
+                    +
+                  </Button>
+                </div>
+              )}
+
+              {isImage && (
+                <Button
+                  secondary
+                  small
+                  onClick={handleRotate}
+                  style={{ height: '32px', padding: '0 8px' }}
+                >
+                  Rotate
+                </Button>
+              )}
+
+              {(isImage || isVideo) && (
+                <Button
+                  secondary
+                  small
+                  onClick={handleReset}
+                  style={{ height: '32px', padding: '0 8px' }}
+                >
+                  Reset
+                </Button>
+              )}
+
+              <Button secondary small onClick={onDownload}>
+                <IconDownload24 />
+              </Button>
+              <Button secondary small onClick={onShare}>
+                <IconShare24 />
+              </Button>
+              {file.canEdit && (
+                <Button secondary small onClick={onEdit}>
+                  <IconEdit24 />
+                </Button>
+              )}
+              <Button secondary small onClick={onClose}>
+                <IconCross24 />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <div data-test="file-preview-tabs">
-            <TabBar>
-              <Tab 
-                selected={activeTab === "preview"} 
-                onClick={() => setActiveTab("preview")}
-              >
-                Preview
-              </Tab>
-              <Tab 
-                selected={activeTab === "details"} 
-                onClick={() => setActiveTab("details")}
-              >
-                Details
-              </Tab>
-              <Tab 
-                selected={activeTab === "audit"} 
-                onClick={() => setActiveTab("audit")}
-              >
-                Audit Log
-              </Tab>
-            </TabBar>
+            {activeTab !== 'audit' && (
+              <TabBar>
+                <Tab 
+                  selected={activeTab === "preview"} 
+                  onClick={() => setActiveTab("preview")}
+                >
+                  Preview
+                </Tab>
+                <Tab 
+                  selected={activeTab === "details"} 
+                  onClick={() => setActiveTab("details")}
+                >
+                  Details
+                </Tab>
+                <Tab 
+                  selected={activeTab === "audit"} 
+                  onClick={() => setActiveTab("audit")}
+                >
+                  Audit Log
+                </Tab>
+              </TabBar>
+            )}
 
             {activeTab === "preview" && (
               <div style={{ position: 'relative', maxHeight: '70vh', overflow: 'auto', padding: '24px' }}>
@@ -621,15 +703,8 @@ export function FilePreview({
             {activeTab === "audit" && (
               <div style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>File Activity Log</h3>
-                  <Button 
-                    secondary 
-                    small 
-                    onClick={loadFileAuditLogs}
-                    disabled={auditLogsLoading}
-                  >
-                    Refresh
-                  </Button>
+                  {/* <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Audit log for {file.fileName}</h3> */}
+                  
                 </div>
 
                 {auditLogsLoading ? (
@@ -642,43 +717,65 @@ export function FilePreview({
                     No audit logs found for this file. Activity will be tracked when the file is accessed, downloaded, or modified.
                   </NoticeBox>
                 ) : (
-                  <div style={{ maxHeight: '400px', overflow: 'auto' }}>
-                    {fileAuditLogs.map((log, index) => (
-                      <div 
-                        key={log.id || index}
-                        style={{ 
-                          padding: '12px', 
-                          border: '1px solid #e1e5e9', 
-                          borderRadius: '4px', 
-                          marginBottom: '8px',
-                          backgroundColor: '#f8f9fa'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ 
-                              padding: '2px 8px', 
-                              borderRadius: '12px', 
-                              fontSize: '12px', 
-                              fontWeight: '500',
-                              backgroundColor: getActionColor(log.action),
-                              color: 'white'
-                            }}>
-                              {log.action.toUpperCase()}
-                            </span>
-                            <span style={{ fontSize: '14px', fontWeight: '500' }}>{log.userName || 'Unknown User'}</span>
-                          </div>
-                          <span style={{ fontSize: '12px', color: '#6c757d' }}>
-                            {new Date(log.timestamp).toLocaleString()}
-                          </span>
-                        </div>
-                        {log.details && (
-                          <p style={{ fontSize: '13px', color: '#6c757d', margin: 0 }}>
-                            {log.details}
-                          </p>
-                        )}
+                  <div style={{ border: '1px solid #e1e5e9', borderRadius: 6, overflow: 'hidden' }}>
+                    <div style={{ padding: '8px 12px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div>
+                        <label style={{ fontSize: 12, color: '#6c757d', marginRight: 6 }}>Activity</label>
+                        <select value={auditActionFilter} onChange={(e) => setAuditActionFilter(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #e1e5e9', borderRadius: 6 }}>
+                          <option value="all">All</option>
+                          <option value="view">View</option>
+                          <option value="edit">Edit</option>
+                          <option value="download">Download</option>
+                          <option value="share">Share</option>
+                          <option value="delete">Delete</option>
+                          <option value="create">Create</option>
+                          <option value="move">Move</option>
+                          <option value="copy">Copy</option>
+                        </select>
                       </div>
-                    ))}
+                      <div>
+                        <label style={{ fontSize: 12, color: '#6c757d', marginRight: 6 }}>From</label>
+                        <input type="date" value={auditDateFrom} onChange={(e) => setAuditDateFrom(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #e1e5e9', borderRadius: 6 }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, color: '#6c757d', marginRight: 6 }}>To</label>
+                        <input type="date" value={auditDateTo} onChange={(e) => setAuditDateTo(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #e1e5e9', borderRadius: 6 }} />
+                      </div>
+                    </div>
+                    <div style={{ background: '#f6f7f9', padding: '10px 12px', borderBottom: '1px solid #e1e5e9' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1.5fr 3fr', gap: 12, fontSize: 12, color: '#6c757d', fontWeight: 600 }}>
+                        <div>Activity</div>
+                        <div>User</div>
+                        <div>Date</div>
+                        <div>Details</div>
+                      </div>
+                    </div>
+                    <div style={{ maxHeight: 420, overflow: 'auto' }}>
+                      {fileAuditLogs
+                        .filter((log: any) => {
+                          const actionOk = auditActionFilter === 'all' || log.action === auditActionFilter;
+                          const ts = new Date(log.timestamp).getTime();
+                          const fromOk = !auditDateFrom || ts >= new Date(auditDateFrom).getTime();
+                          const toOk = !auditDateTo || ts <= new Date(auditDateTo).getTime() + 24 * 60 * 60 * 1000 - 1;
+                          return actionOk && fromOk && toOk;
+                        })
+                        .map((log: any, index: number) => (
+                        <div key={log.id || index} style={{ padding: '10px 12px', borderBottom: '1px solid #eef1f4' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1.5fr 3fr', gap: 12, alignItems: 'center' }}>
+                            <div>
+                              <Chip>{log.action.toUpperCase()}</Chip>
+                            </div>
+                            <div style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {log.userName || 'Unknown User'}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#6c757d' }}>{new Date(log.timestamp).toLocaleString()}</div>
+                            <div style={{ fontSize: 12, color: '#6c757d', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {log.details || '-'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
