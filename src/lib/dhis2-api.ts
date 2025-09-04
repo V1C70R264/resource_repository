@@ -981,10 +981,34 @@ export class DHIS2DataStoreAPI {
     }
   }
 
-  // Audit Logging
+  // Audit Logging - File-Specific System
   async saveAuditLog(log: any): Promise<boolean> {
     const key = `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     return this.setKeyValue(key, log);
+  }
+
+  // New file-specific audit log methods
+  async saveFileAuditLog(fileId: string, log: any): Promise<boolean> {
+    const key = `audit_${fileId}_${Date.now()}`;
+    const fileAuditLog = { ...log, fileId };
+    return this.setKeyValue(key, fileAuditLog);
+  }
+
+  async getFileAuditLogs(fileId: string): Promise<any[]> {
+    const keys = await this.getNamespaceKeys();
+    const logs: any[] = [];
+    
+    // Get logs with file-specific keys (audit_fileId_timestamp)
+    const fileAuditKeys = keys.filter(key => key.startsWith(`audit_${fileId}_`));
+    for (const key of fileAuditKeys) {
+      const log = await this.getKeyValue(key);
+      if (log && log.fileId === fileId) {
+        logs.push(log);
+      }
+    }
+    
+    // Sort by timestamp (newest first)
+    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   async getAuditLogs(limit: number = 100): Promise<any[]> {

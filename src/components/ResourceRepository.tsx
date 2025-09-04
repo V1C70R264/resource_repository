@@ -7,7 +7,7 @@ import { NewFolderDialog } from "./NewFolderDialog";
 import { FileUploadDialog } from "./FileUploadDialog";
 import { FolderUploadDialog } from "./FolderUploadDialog";
 import { AdvancedSearch } from "./AdvancedSearch";
-import { AuditLogDialog } from "./AuditLog";
+// import { AuditLogDialog } from "./AuditLog"; // Removed - using file-specific audit logs in FilePreview
 // import { AccessControlDialog } from "./AccessControl";
 import { FilePreview } from "./FilePreview";
 import { MetadataEditor } from "./MetadataEditor";
@@ -228,7 +228,8 @@ export function ResourceRepository() {
   });
   const [previewFile, setPreviewFile] = useState<PreviewData | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [showAuditLog, setShowAuditLog] = useState(false);
+  // const [showAuditLog, setShowAuditLog] = useState(false); // Removed - using file-specific audit logs in FilePreview
+  const [previewInitialTab, setPreviewInitialTab] = useState("preview");
   const [showAccessControl, setShowAccessControl] = useState(false);
   const [showMetadataEditor, setShowMetadataEditor] = useState(false);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
@@ -640,7 +641,8 @@ export function ResourceRepository() {
               timestamp: new Date().toISOString(),
               details: 'File previewed',
             };
-            saveAuditLog(auditLog);
+            // Use file-specific audit log
+            await dataStoreAPI.saveFileAuditLog(item.id, auditLog);
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to prepare preview';
             alerts.critical(message);
@@ -698,6 +700,20 @@ export function ResourceRepository() {
               const ok = await dataStoreAPI.saveFile(toSave);
               if (ok) {
                 alerts.success(`${toSave.starred ? 'Starred' : 'Removed star from'}: ${item.name}`);
+                
+                // Log the star/unstar action
+                const auditLog: AuditLog = {
+                  id: `log_${Date.now()}`,
+                  fileId: item.id,
+                  fileName: item.name,
+                  action: 'edit',
+                  userId: 'current-user',
+                  userName: 'Current User',
+                  timestamp: new Date().toISOString(),
+                  details: `File ${toSave.starred ? 'starred' : 'unstarred'}`,
+                };
+                await dataStoreAPI.saveFileAuditLog(item.id, auditLog);
+                
                 await refreshFiles();
               } else {
                 alerts.critical(`Failed to ${item.starred ? 'remove star from' : 'star'}: ${item.name}`);
@@ -750,8 +766,9 @@ export function ResourceRepository() {
         setShowAccessControl(true);
         break;
       case 'audit':
-        setSelectedFile(item);
-        setShowAuditLog(true);
+        // Open file preview with audit tab for file-specific logs
+        setPreviewInitialTab("audit");
+        handleItemAction('preview', item);
         break;
       default:
         alerts.info(`Action ${action} on: ${item.name}`);
@@ -774,7 +791,8 @@ export function ResourceRepository() {
           timestamp: new Date().toISOString(),
           details: 'Item moved to trash',
         };
-        saveAuditLog(auditLog);
+        // Use file-specific audit log
+        await dataStoreAPI.saveFileAuditLog(deleteTarget.id, auditLog);
       } else {
         alerts.critical(`Failed to move to trash: ${deleteTarget.name}`);
       }
@@ -812,6 +830,22 @@ export function ResourceRepository() {
       
       if (success) {
         alerts.success(`Folder "${name}" created successfully`);
+        
+        // Log create action for the new folder
+        // Note: We need to get the folder ID from the created folder
+        // Since createFolder returns the folder object, we can use it
+        const auditLog: AuditLog = {
+          id: `log_${Date.now()}`,
+          fileId: success.id || `folder_${Date.now()}`, // Use the folder ID from the created folder
+          fileName: name,
+          action: 'create',
+          userId: 'current-user',
+          userName: 'Current User',
+          timestamp: new Date().toISOString(),
+          details: `Folder created${currentFolderId ? ` in folder ${currentFolderId}` : ''}`,
+        };
+        await dataStoreAPI.saveFileAuditLog(success.id || `folder_${Date.now()}`, auditLog);
+        
         // No need to call initializeData() - createFolder already refreshes
       } else {
         alerts.critical('Failed to create folder');
@@ -873,6 +907,21 @@ export function ResourceRepository() {
       
       if (uploadedFiles.length > 0) {
         alerts.success(`Successfully uploaded ${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''}`);
+        
+        // Log create action for each uploaded file
+        for (const file of uploadedFiles) {
+          const auditLog: AuditLog = {
+            id: `log_${Date.now()}_${file.id}`,
+            fileId: file.id,
+            fileName: file.name,
+            action: 'create',
+            userId: 'current-user',
+            userName: 'Current User',
+            timestamp: new Date().toISOString(),
+            details: `File uploaded${folderId ? ` to folder ${folderId}` : ''}`,
+          };
+          await dataStoreAPI.saveFileAuditLog(file.id, auditLog);
+        }
         
         // Debug: Check the structure of uploaded files
         console.log('[DEBUG] Uploaded files structure:');
@@ -973,9 +1022,23 @@ export function ResourceRepository() {
     }
   };
 
-  const handleMetadataSave = (metadata: FileMetadata) => {
+  const handleMetadataSave = async (metadata: FileMetadata) => {
     if (metadata.type === 'file') {
-      saveFile(metadata as any);
+      const success = await saveFile(metadata as any);
+      if (success) {
+        // Log the metadata edit action
+        const auditLog: AuditLog = {
+          id: `log_${Date.now()}`,
+          fileId: metadata.id,
+          fileName: metadata.name,
+          action: 'edit',
+          userId: 'current-user',
+          userName: 'Current User',
+          timestamp: new Date().toISOString(),
+          details: 'File metadata updated',
+        };
+        await dataStoreAPI.saveFileAuditLog(metadata.id, auditLog);
+      }
     } else {
       saveFolder(metadata as any);
     }
@@ -1049,17 +1112,21 @@ export function ResourceRepository() {
       const updated = Array.from(existingMap.values());
       const ok = await savePermissions(updated);
       if (!ok) throw new Error('Failed to save permissions');
-      const log: AuditLog = {
-        id: `log_${Date.now()}`,
-        fileId: expandedPerms[0]?.fileId || selectedFile?.id || '',
-        fileName: selectedFile?.name || `${expandedPerms.length} items`,
-        action: 'share',
-        userId: 'current-user',
-        userName: 'Current User',
-        timestamp: new Date().toISOString(),
-        details: `Shared ${new Set(expandedPerms.map(p => p.fileId)).size} item(s) with ${expandedPerms.length} permission entry(ies)`
-      };
-      await saveAuditLog(log);
+      // Log share action for each file individually
+      const uniqueFileIds = new Set(expandedPerms.map(p => p.fileId));
+      for (const fileId of uniqueFileIds) {
+        const log: AuditLog = {
+          id: `log_${Date.now()}_${fileId}`,
+          fileId: fileId,
+          fileName: allFiles.find(i => i.id === fileId)?.name || 'Unknown File',
+          action: 'share',
+          userId: 'current-user',
+          userName: 'Current User',
+          timestamp: new Date().toISOString(),
+          details: `Shared with ${expandedPerms.filter(p => p.fileId === fileId).length} permission(s)`
+        };
+        await dataStoreAPI.saveFileAuditLog(fileId, log);
+      }
       alerts.success('Shared successfully');
     } catch (e) {
       alerts.critical('Failed to share');
@@ -1159,7 +1226,8 @@ export function ResourceRepository() {
           timestamp: new Date().toISOString(),
           details: 'File downloaded',
         };
-        saveAuditLog(log);
+        // Use file-specific audit log
+        await dataStoreAPI.saveFileAuditLog(item.id, log);
       } catch (e) {
         alerts.critical('Failed to download file');
       }
@@ -1809,10 +1877,14 @@ export function ResourceRepository() {
         <FilePreview
           file={previewFile}
           isOpen={showPreview}
-          onClose={handlePreviewClose}
+          onClose={() => {
+            handlePreviewClose();
+            setPreviewInitialTab("preview"); // Reset to default tab
+          }}
           onDownload={handlePreviewDownload}
           onShare={handlePreviewShare}
           onEdit={handlePreviewEdit}
+          initialTab={previewInitialTab}
         />
       )}
 
@@ -1837,11 +1909,7 @@ export function ResourceRepository() {
         </>
       )}
 
-      <AuditLogDialog
-        logs={dhis2AuditLogs}
-        isOpen={showAuditLog}
-        onClose={() => setShowAuditLog(false)}
-      />
+      {/* Old global audit dialog removed - now using file-specific audit logs in FilePreview */}
 
       {(selectedFile || (selectedItems && selectedItems.length > 0)) && (
         <ShareDialog

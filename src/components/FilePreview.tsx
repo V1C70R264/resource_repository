@@ -17,6 +17,7 @@ import {
 } from '@dhis2/ui-icons';
 import { PreviewData } from "@/lib/types";
 import { getAuthHeaders } from "@/config/dhis2";
+import { dataStoreAPI } from "@/lib/dhis2-api";
 
 interface FilePreviewProps {
   file: PreviewData;
@@ -25,6 +26,7 @@ interface FilePreviewProps {
   onDownload: () => void;
   onShare: () => void;
   onEdit: () => void;
+  initialTab?: string;
 }
 
 export function FilePreview({
@@ -34,14 +36,17 @@ export function FilePreview({
   onDownload,
   onShare,
   onEdit,
+  initialTab = "preview",
 }: FilePreviewProps) {
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
-  const [activeTab, setActiveTab] = useState("preview");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [isLoading, setIsLoading] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [resolvedUrl, setResolvedUrl] = useState<string>(file.url);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [fileAuditLogs, setFileAuditLogs] = useState<any[]>([]);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 
   // Normalize DHIS2 fileResources URLs to relative paths for same-origin auth
   const normalizeUrl = (url: string): string => {
@@ -63,6 +68,13 @@ export function FilePreview({
     }
   };
 
+  // Load file audit logs when file changes or audit tab is selected
+  useEffect(() => {
+    if (activeTab === "audit" && file.fileId) {
+      loadFileAuditLogs();
+    }
+  }, [file.fileId, activeTab]);
+
   // Reset state when file or tab changes
   useEffect(() => {
     setIsLoading(true);
@@ -80,6 +92,27 @@ export function FilePreview({
       setResolvedUrl(normalizeUrl(file.url));
     }
   }, [file, activeTab]);
+
+  // Update activeTab when initialTab prop changes
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  // Load file-specific audit logs
+  const loadFileAuditLogs = async () => {
+    if (!file.fileId) return;
+    
+    setAuditLogsLoading(true);
+    try {
+      const logs = await dataStoreAPI.getFileAuditLogs(file.fileId);
+      setFileAuditLogs(logs);
+    } catch (error) {
+      console.error('Failed to load file audit logs:', error);
+      setFileAuditLogs([]);
+    } finally {
+      setAuditLogsLoading(false);
+    }
+  };
 
   // Prefetch secured URLs with auth and convert to blob URL for media
   useEffect(() => {
@@ -168,6 +201,21 @@ export function FilePreview({
   const handleReset = () => {
     setZoom(100);
     setRotation(0);
+  };
+
+  // Helper function to get color for audit log actions
+  const getActionColor = (action: string): string => {
+    const colors: Record<string, string> = {
+      'view': '#3b82f6',      // blue
+      'edit': '#f59e0b',      // amber
+      'download': '#10b981',  // emerald
+      'share': '#8b5cf6',     // violet
+      'delete': '#ef4444',    // red
+      'create': '#06b6d4',    // cyan
+      'move': '#84cc16',      // lime
+      'copy': '#f97316',      // orange
+    };
+    return colors[action] || '#6b7280'; // gray fallback
   };
 
   const renderPreview = () => {
@@ -494,6 +542,12 @@ export function FilePreview({
               >
                 Details
               </Tab>
+              <Tab 
+                selected={activeTab === "audit"} 
+                onClick={() => setActiveTab("audit")}
+              >
+                Audit Log
+              </Tab>
             </TabBar>
 
             {activeTab === "preview" && (
@@ -559,6 +613,72 @@ export function FilePreview({
                         border: '1px solid #e1e5e9' 
                       }}
                     />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "audit" && (
+              <div style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>File Activity Log</h3>
+                  <Button 
+                    secondary 
+                    small 
+                    onClick={loadFileAuditLogs}
+                    disabled={auditLogsLoading}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+
+                {auditLogsLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px' }}>
+                    <CircularLoader small />
+                    <span style={{ marginLeft: '12px' }}>Loading audit logs...</span>
+                  </div>
+                ) : fileAuditLogs.length === 0 ? (
+                  <NoticeBox title="No Activity">
+                    No audit logs found for this file. Activity will be tracked when the file is accessed, downloaded, or modified.
+                  </NoticeBox>
+                ) : (
+                  <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                    {fileAuditLogs.map((log, index) => (
+                      <div 
+                        key={log.id || index}
+                        style={{ 
+                          padding: '12px', 
+                          border: '1px solid #e1e5e9', 
+                          borderRadius: '4px', 
+                          marginBottom: '8px',
+                          backgroundColor: '#f8f9fa'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ 
+                              padding: '2px 8px', 
+                              borderRadius: '12px', 
+                              fontSize: '12px', 
+                              fontWeight: '500',
+                              backgroundColor: getActionColor(log.action),
+                              color: 'white'
+                            }}>
+                              {log.action.toUpperCase()}
+                            </span>
+                            <span style={{ fontSize: '14px', fontWeight: '500' }}>{log.userName || 'Unknown User'}</span>
+                          </div>
+                          <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                            {new Date(log.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        {log.details && (
+                          <p style={{ fontSize: '13px', color: '#6c757d', margin: 0 }}>
+                            {log.details}
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
