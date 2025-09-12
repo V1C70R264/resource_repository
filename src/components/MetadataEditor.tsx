@@ -182,8 +182,8 @@ export function MetadataEditor({ file, isOpen, onClose, onSave }: MetadataEditor
                     ))}
                   </SingleSelect>
                 </div> */}
-                <div>
-                  <div style={{ fontSize: 12, color: "var(--colors-grey700)", marginBottom: 4 }}>Document type</div>
+                {/* <div> */}
+                  {/* <div style={{ fontSize: 12, color: "var(--colors-grey700)", marginBottom: 4 }}>Document type</div>
                   <SingleSelect
                     selected={metadata.documentType || ""}
                     onChange={({ selected }) => setMetadata({ ...metadata, documentType: selected })}
@@ -194,7 +194,7 @@ export function MetadataEditor({ file, isOpen, onClose, onSave }: MetadataEditor
                       <SingleSelectOption key={type} label={type} value={type} />
                     ))}
                   </SingleSelect>
-                </div>
+                </div> */}
               </div>
 
               {/* Version */}

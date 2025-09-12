@@ -266,7 +266,7 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                 }}>
                   Access level
                 </label>
-                <SingleSelectField 
+                <SingleSelect
                   className="no-caret"
                   // clearable={true}
                   selected={permissionType}
@@ -277,7 +277,7 @@ export function ShareDialog({ fileId, fileIds, fileName, users: usersProp, isOpe
                 >
                   <SingleSelectOption label="View only" value="read" />
                   <SingleSelectOption label="View and edit" value="write" />
-                </SingleSelectField>
+                </SingleSelect>
               </div>
 
               {/* Give access button */}
